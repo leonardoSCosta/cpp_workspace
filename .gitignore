@@ -2,3 +2,6 @@
 build
 debug
 release
+compile_*
+.vim
+*.vim
