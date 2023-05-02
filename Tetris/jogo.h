@@ -2,7 +2,7 @@
 #define JOGO_H
 
 #include <QMainWindow>
-#include "Bloco/bloco.h"
+#include "Tetris/tetris.h"
 #include <QTimer>
 #include <QPainter>
 
@@ -10,7 +10,7 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class Jogo; }
 QT_END_NAMESPACE
 
-#define TEMPO_CLOCK 16
+#define TEMPO_CLOCK 200
 
 class Jogo : public QMainWindow
 {
@@ -24,9 +24,14 @@ private:
     Ui::Jogo *ui;
     QSharedPointer<QTimer> clock;
     QPixmap pmTela;
-    float fEscala;
+    float fEscalaX;
+    float fEscalaY;
+    int labelOffset;
+
+    Tetris tetrisGame;
 
     void desenhaBloco(int x, int y, QColor cor);
+    void setup();
 
 private slots:
 

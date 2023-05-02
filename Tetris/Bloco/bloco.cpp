@@ -6,14 +6,73 @@ Bloco::Bloco()
 
 }
 
-void Bloco::Desce()
+void Bloco::desce()
 {
+    for(QPoint &_pt : ptBlocks) 
+    {
+        _pt = _pt - QPoint(0, 1);
+    }
+}
 
+void Bloco::translate(const QPoint &_to) 
+{
+    for(QPoint &_pt : ptBlocks) 
+    {
+        _pt = _pt + _to;
+    }
+}
+
+bool Bloco::checkCollision(const QPoint &_test) const
+{
+    for(const QPoint &_pt : ptBlocks) 
+    {
+        if((_test - _pt).manhattanLength() <= 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+QPoint Bloco::lowest() const
+{
+    QPoint pos(0, 100);
+    for(const QPoint &pt : ptBlocks)
+    {
+        if(pt.y() < pos.y())
+        {
+            pos = pt;
+        }
+    }
+    return pos;
+}
+
+QPoint Bloco::highest() const
+{
+    QPoint pos(0, -100);
+    for(const QPoint &pt : ptBlocks)
+    {
+        if(pt.y() > pos.y())
+        {
+            pos = pt;
+        }
+    }
+    return pos;
 }
 
 const QVector<QPoint> Bloco::ptGetBlockShape() const
 {
     return qAsConst(ptBlocks);
+}
+
+TiposBlocos Bloco::type() const
+{
+    return IDBloco;
+}
+
+QColor Bloco::color() const
+{
+    return blockColor;
 }
 
 QSharedPointer<Bloco> Bloco::GerarBloco()
@@ -70,6 +129,8 @@ BlocoI::BlocoI()
     ptBlocks.append(QPoint(0, 1));
     ptBlocks.append(QPoint(0, 2));
     ptBlocks.append(QPoint(0, 3));
+
+    blockColor = QColor::fromRgb(0, 240, 240);
 }
 
 BlocoI::~BlocoI()
@@ -103,6 +164,8 @@ BlocoJ::BlocoJ()
     ptBlocks.append(QPoint(1, 0));
     ptBlocks.append(QPoint(2, 0));
     ptBlocks.append(QPoint(0, 1));
+
+    blockColor = QColor::fromRgb(0, 0, 240);
 }
 
 BlocoJ::~BlocoJ()
@@ -136,6 +199,8 @@ BlocoL::BlocoL()
     ptBlocks.append(QPoint(1, 0));
     ptBlocks.append(QPoint(2, 0));
     ptBlocks.append(QPoint(2, 1));
+
+    blockColor = QColor::fromRgb(240, 160, 0);
 }
 
 BlocoL::~BlocoL()
@@ -169,6 +234,8 @@ BlocoO::BlocoO()
     ptBlocks.append(QPoint(1, 0));
     ptBlocks.append(QPoint(0, 1));
     ptBlocks.append(QPoint(1, 1));
+
+    blockColor = QColor::fromRgb(240, 240, 0);
 }
 
 BlocoO::~BlocoO()
@@ -202,6 +269,8 @@ BlocoS::BlocoS()
     ptBlocks.append(QPoint(1, 0));
     ptBlocks.append(QPoint(1, 1));
     ptBlocks.append(QPoint(2, 1));
+
+    blockColor = QColor::fromRgb(0, 240, 0);
 }
 
 BlocoS::~BlocoS()
@@ -232,6 +301,11 @@ BlocoT::BlocoT()
     //   T          (1, 1)
     // T T T (0, 0) (1, 0) (2, 0)
     ptBlocks.append(QPoint(0, 0));
+    ptBlocks.append(QPoint(1, 1));
+    ptBlocks.append(QPoint(1, 0));
+    ptBlocks.append(QPoint(2, 0));
+
+    blockColor = QColor::fromRgb(160, 0, 240);
 }
 
 BlocoT::~BlocoT()
@@ -265,6 +339,8 @@ BlocoZ::BlocoZ()
     ptBlocks.append(QPoint(1, 1));
     ptBlocks.append(QPoint(1, 0));
     ptBlocks.append(QPoint(2, 0));
+
+    blockColor = QColor::fromRgb(240, 0, 0);
 }
 
 BlocoZ::~BlocoZ()

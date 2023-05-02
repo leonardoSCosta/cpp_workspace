@@ -1,8 +1,8 @@
 #ifndef BLOCO_H
 #define BLOCO_H
 
-#include "qpoint.h"
-#include "qvector.h"
+#include <QColor>
+#include <QPoint>
 #include <QVector>
 #include <QPoint>
 #include <QRandomGenerator>
@@ -28,12 +28,14 @@ typedef enum TiposBlocos
 
 class Bloco
 {
+protected:
+    TiposBlocos IDBloco;
+    QVector<QPoint> ptBlocks;
+    QColor blockColor;
+
 public:
     Bloco();
     virtual ~Bloco() { };
-
-    TiposBlocos IDBloco;
-    QVector<QPoint> ptBlocks;
 
     /**
      * @brief Rotaciona o bloco no sentido horário.
@@ -58,13 +60,25 @@ public:
      */
     const QVector<QPoint> ptGetBlockShape() const;
 
+    TiposBlocos type() const;
+
+    QColor color() const;
+
     /**
      * @brief Desce o bloco em uma unidade.
      *
      * Neste caso, pode não ser necessário implementar um método Desce() para
      * cada tipo de bloco, por conta disso este método não precisa ser virtual.
      */
-    void Desce();
+    void desce();
+
+    void translate(const QPoint &_to);
+
+    bool checkCollision(const QPoint &_test) const;
+
+    QPoint lowest() const;
+
+    QPoint highest() const;
 
     /**
      * @brief Gera um bloco aleatório.

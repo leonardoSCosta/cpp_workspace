@@ -10,13 +10,13 @@ CONFIG += c++11
 
 SOURCES += \
     Bloco/bloco.cpp \
-    Tela/tela.cpp \
+    Tetris/tetris.cpp \
     main.cpp \
     jogo.cpp
 
 HEADERS += \
     Bloco/bloco.h \
-    Tela/tela.h \
+    Tetris/tetris.h \
     jogo.h
 
 FORMS += \
