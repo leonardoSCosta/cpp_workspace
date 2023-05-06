@@ -3,9 +3,9 @@
 
 #include "Tetris/tetris.h"
 #include <QMainWindow>
+#include <QMessageBox>
 #include <QPainter>
 #include <QTimer>
-#include <QMessageBox>
 
 QT_BEGIN_NAMESPACE
 namespace Ui
@@ -20,11 +20,11 @@ class Jogo : public QMainWindow
 {
     Q_OBJECT
 
-  public:
+public:
     Jogo(QWidget* parent = nullptr);
     ~Jogo();
 
-  private:
+private:
     Ui::Jogo* ui;
     QSharedPointer<QTimer> clock;
     QPixmap pmTela;
@@ -38,7 +38,7 @@ class Jogo : public QMainWindow
     void desenhaJogo();
     void setup();
 
-  private slots:
+private slots:
 
     /**
      * @brief Base de tempo para o jogo

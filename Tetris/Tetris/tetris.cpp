@@ -144,7 +144,7 @@ bool Tetris::rotateBlock(char _direction)
         case 'Q': {
             currentBlock->RotacionaAH();
             while (currentBlock->isInside(TETRIS_WIDTH) == false ||
-                blockCollision())
+                   blockCollision())
             {
                 currentBlock->RotacionaH();
                 currentBlock->translate({1, 0});

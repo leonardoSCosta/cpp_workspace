@@ -28,12 +28,12 @@ typedef enum TiposBlocos
 
 class Bloco
 {
-  protected:
+protected:
     TiposBlocos IDBloco;
     QVector<QPoint> ptBlocks;
     QColor blockColor;
 
-  public:
+public:
     Bloco();
     virtual ~Bloco(){};
 
@@ -89,7 +89,7 @@ class Bloco
 class BlocoI : public Bloco
 {
 
-  public:
+public:
     BlocoI();
     ~BlocoI();
 
@@ -107,7 +107,7 @@ class BlocoI : public Bloco
 class BlocoJ : public Bloco
 {
 
-  public:
+public:
     BlocoJ();
     ~BlocoJ();
 
@@ -125,7 +125,7 @@ class BlocoJ : public Bloco
 class BlocoL : public Bloco
 {
 
-  public:
+public:
     BlocoL();
     ~BlocoL();
 
@@ -143,7 +143,7 @@ class BlocoL : public Bloco
 class BlocoO : public Bloco
 {
 
-  public:
+public:
     BlocoO();
     ~BlocoO();
 
@@ -161,7 +161,7 @@ class BlocoO : public Bloco
 class BlocoS : public Bloco
 {
 
-  public:
+public:
     BlocoS();
     ~BlocoS();
 
@@ -179,7 +179,7 @@ class BlocoS : public Bloco
 class BlocoT : public Bloco
 {
 
-  public:
+public:
     BlocoT();
     ~BlocoT();
 
@@ -197,7 +197,7 @@ class BlocoT : public Bloco
 class BlocoZ : public Bloco
 {
 
-  public:
+public:
     BlocoZ();
     ~BlocoZ();
 

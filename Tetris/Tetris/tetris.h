@@ -18,7 +18,7 @@ class Tetris : public QObject
     QPoint userMovement;
     QVector<TiposBlocos> generatedBlocks;
 
-  public:
+public:
     Tetris();
 
     int tick();
