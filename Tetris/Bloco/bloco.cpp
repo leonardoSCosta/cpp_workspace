@@ -3,30 +3,49 @@
 
 Bloco::Bloco()
 {
+}
 
+void Bloco::RotacionaH()
+{
+    QPoint pivot = ptBlocks.at(0);
+    for (QPoint& pt : ptBlocks)
+    {
+        pt -= pivot;
+        pt = QPoint(pt.y(), -pt.x()) + pivot;
+    }
+}
+
+void Bloco::RotacionaAH()
+{
+    QPoint pivot = ptBlocks.at(0);
+    for (QPoint& pt : ptBlocks)
+    {
+        pt -= pivot;
+        pt = QPoint(-pt.y(), pt.x()) + pivot;
+    }
 }
 
 void Bloco::desce()
 {
-    for(QPoint &_pt : ptBlocks) 
+    for (QPoint& _pt : ptBlocks)
     {
         _pt = _pt - QPoint(0, 1);
     }
 }
 
-void Bloco::translate(const QPoint &_to) 
+void Bloco::translate(const QPoint& _to)
 {
-    for(QPoint &_pt : ptBlocks) 
+    for (QPoint& _pt : ptBlocks)
     {
         _pt = _pt + _to;
     }
 }
 
-bool Bloco::checkCollision(const QPoint &_test) const
+bool Bloco::checkCollision(const QPoint& _test) const
 {
-    for(const QPoint &_pt : ptBlocks) 
+    for (const QPoint& _pt : ptBlocks)
     {
-        if((_test - _pt).manhattanLength() <= 0)
+        if ((_test - _pt).manhattanLength() <= 0)
         {
             return true;
         }
@@ -34,12 +53,24 @@ bool Bloco::checkCollision(const QPoint &_test) const
     return false;
 }
 
+bool Bloco::isInside(const int _limit) const
+{
+    for (const QPoint& _pt : ptBlocks)
+    {
+        if (_pt.x() < 0 || _pt.x() >= _limit || _pt.y() < 0)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 QPoint Bloco::lowest() const
 {
     QPoint pos(0, 100);
-    for(const QPoint &pt : ptBlocks)
+    for (const QPoint& pt : ptBlocks)
     {
-        if(pt.y() < pos.y())
+        if (pt.y() < pos.y())
         {
             pos = pt;
         }
@@ -50,9 +81,9 @@ QPoint Bloco::lowest() const
 QPoint Bloco::highest() const
 {
     QPoint pos(0, -100);
-    for(const QPoint &pt : ptBlocks)
+    for (const QPoint& pt : ptBlocks)
     {
-        if(pt.y() > pos.y())
+        if (pt.y() > pos.y())
         {
             pos = pt;
         }
@@ -75,38 +106,50 @@ QColor Bloco::color() const
     return blockColor;
 }
 
-QSharedPointer<Bloco> Bloco::GerarBloco()
+QSharedPointer<Bloco> Bloco::GerarBloco(QVector<TiposBlocos>& _generatedBlocks)
 {
-    TiposBlocos tipoBloco = static_cast<TiposBlocos>(QRandomGenerator::global()->bounded(N_BLOCOS));
+    TiposBlocos tipoBloco;
+    if (_generatedBlocks.size() == N_BLOCOS)
+    {
+        _generatedBlocks.clear();
+    }
+
+    do
+    {
+        tipoBloco = static_cast<TiposBlocos>(
+            QRandomGenerator::global()->bounded(N_BLOCOS));
+    } while (_generatedBlocks.contains(tipoBloco));
+    _generatedBlocks.push_back(tipoBloco);
+
     QSharedPointer<Bloco> bloco;
 
     switch (tipoBloco)
     {
-        case BLOCO_I:
-            bloco.reset(new BlocoI);
-            break;
-        case BLOCO_J:
-            bloco.reset(new BlocoJ);
-            break;
-        case BLOCO_L:
-            bloco.reset(new BlocoL);
-            break;
-        case BLOCO_O:
-            bloco.reset(new BlocoO);
-            break;
-        case BLOCO_S:
-            bloco.reset(new BlocoS);
-            break;
-        case BLOCO_T:
-            bloco.reset(new BlocoT);
-            break;
-        case BLOCO_Z:
-            bloco.reset(new BlocoZ);
-            break;
-        default:
-            qDebug() << "ID de bloco inválido\n";
-            bloco.reset(new BlocoI);
-            break;
+    case BLOCO_I:
+        bloco.reset(new BlocoI);
+        break;
+    case BLOCO_J:
+        bloco.reset(new BlocoJ);
+        break;
+    case BLOCO_L:
+        bloco.reset(new BlocoL);
+        break;
+    case BLOCO_O:
+        bloco.reset(new BlocoO);
+        break;
+    case BLOCO_S:
+        bloco.reset(new BlocoS);
+        break;
+    case BLOCO_T:
+        bloco.reset(new BlocoT);
+        break;
+    case BLOCO_Z:
+        bloco.reset(new BlocoZ);
+        break;
+    default:
+        qDebug() << "ID de bloco inválido\n";
+        bloco.reset(new BlocoI);
+        break;
     }
     return bloco;
 }
@@ -135,17 +178,6 @@ BlocoI::BlocoI()
 
 BlocoI::~BlocoI()
 {
-
-}
-
-void BlocoI::RotacionaH()
-{
-
-}
-
-void BlocoI::RotacionaAH()
-{
-
 }
 
 /*  ____  _     ___   ____ ___        _
@@ -170,17 +202,6 @@ BlocoJ::BlocoJ()
 
 BlocoJ::~BlocoJ()
 {
-
-}
-
-void BlocoJ::RotacionaH()
-{
-
-}
-
-void BlocoJ::RotacionaAH()
-{
-
 }
 
 /*  ____  _     ___   ____ ___    _
@@ -205,17 +226,6 @@ BlocoL::BlocoL()
 
 BlocoL::~BlocoL()
 {
-
-}
-
-void BlocoL::RotacionaH()
-{
-
-}
-
-void BlocoL::RotacionaAH()
-{
-
 }
 
 /*  ____  _     ___   ____ ___     ___
@@ -240,17 +250,6 @@ BlocoO::BlocoO()
 
 BlocoO::~BlocoO()
 {
-
-}
-
-void BlocoO::RotacionaH()
-{
-
-}
-
-void BlocoO::RotacionaAH()
-{
-
 }
 
 /*  ____  _     ___   ____ ___    ____
@@ -275,17 +274,6 @@ BlocoS::BlocoS()
 
 BlocoS::~BlocoS()
 {
-
-}
-
-void BlocoS::RotacionaH()
-{
-
-}
-
-void BlocoS::RotacionaAH()
-{
-
 }
 
 /*  ____  _     ___   ____ ___    _____
@@ -310,17 +298,6 @@ BlocoT::BlocoT()
 
 BlocoT::~BlocoT()
 {
-
-}
-
-void BlocoT::RotacionaH()
-{
-
-}
-
-void BlocoT::RotacionaAH()
-{
-
 }
 
 /*  ____  _     ___   ____ ___    _____
@@ -345,15 +322,4 @@ BlocoZ::BlocoZ()
 
 BlocoZ::~BlocoZ()
 {
-
-}
-
-void BlocoZ::RotacionaH()
-{
-
-}
-
-void BlocoZ::RotacionaAH()
-{
-
 }

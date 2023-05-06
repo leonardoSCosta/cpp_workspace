@@ -2,12 +2,12 @@
 #define BLOCO_H
 
 #include <QColor>
-#include <QPoint>
-#include <QVector>
+#include <QDebug>
 #include <QPoint>
 #include <QRandomGenerator>
 #include <QSharedPointer>
-#include <QDebug>
+#include <QVector>
+#include <QtMath>
 
 #define BLOCK_SIZE 4
 
@@ -17,41 +17,35 @@
 typedef enum TiposBlocos
 {
     BLOCO_I = 0,
-    BLOCO_J    ,
-    BLOCO_L    ,
-    BLOCO_O    ,
-    BLOCO_S    ,
-    BLOCO_T    ,
-    BLOCO_Z    ,
+    BLOCO_J,
+    BLOCO_L,
+    BLOCO_O,
+    BLOCO_S,
+    BLOCO_T,
+    BLOCO_Z,
     N_BLOCOS // Indica a quantidade máxima de blocos (7)
-}TiposBlocos;
+} TiposBlocos;
 
 class Bloco
 {
-protected:
+  protected:
     TiposBlocos IDBloco;
     QVector<QPoint> ptBlocks;
     QColor blockColor;
 
-public:
+  public:
     Bloco();
-    virtual ~Bloco() { };
+    virtual ~Bloco(){};
 
     /**
      * @brief Rotaciona o bloco no sentido horário.
-     *
-     * Este métido é virtual, pois cada bloco será rotacionado de uma forma,
-     * mas todos os blocos devem rotacionar, ou seja, todos os blocos irão
-     * possuir o método RotacionaH() para rotacioná-lo no sentido horário, mas, a
-     * implementação será diferente para cada um. O modificador *virtual* força
-     * o programador a implementar este método quando esta classe for herdada.
      */
-    virtual void RotacionaH() = 0;
+    void RotacionaH();
 
     /**
      * @brief Rotaciona o bloco no sentido anti-horário.
      */
-    virtual void RotacionaAH() = 0;
+    void RotacionaAH();
 
     /**
      * @brief Retorna a forma do bloco.
@@ -64,17 +58,13 @@ public:
 
     QColor color() const;
 
-    /**
-     * @brief Desce o bloco em uma unidade.
-     *
-     * Neste caso, pode não ser necessário implementar um método Desce() para
-     * cada tipo de bloco, por conta disso este método não precisa ser virtual.
-     */
     void desce();
 
-    void translate(const QPoint &_to);
+    void translate(const QPoint& _to);
 
-    bool checkCollision(const QPoint &_test) const;
+    bool checkCollision(const QPoint& _test) const;
+
+    bool isInside(const int _limit) const;
 
     QPoint lowest() const;
 
@@ -85,7 +75,8 @@ public:
      *
      * @return
      */
-    static QSharedPointer<Bloco> GerarBloco();
+    static QSharedPointer<Bloco> GerarBloco(
+        QVector<TiposBlocos>& _generatedBlocks);
 };
 
 /*  ____  _     ___   ____ ___    ___
@@ -95,10 +86,10 @@ public:
  * |____/|_____\___/ \____\___/  |___|
  */
 
-class BlocoI: public Bloco
+class BlocoI : public Bloco
 {
 
-public:
+  public:
     BlocoI();
     ~BlocoI();
 
@@ -113,10 +104,10 @@ public:
  * |____/|_____\___/ \____\___/   \___/
  */
 
-class BlocoJ: public Bloco
+class BlocoJ : public Bloco
 {
 
-public:
+  public:
     BlocoJ();
     ~BlocoJ();
 
@@ -131,10 +122,10 @@ public:
  * |____/|_____\___/ \____\___/  |_____|
  */
 
-class BlocoL: public Bloco
+class BlocoL : public Bloco
 {
 
-public:
+  public:
     BlocoL();
     ~BlocoL();
 
@@ -149,10 +140,10 @@ public:
  * |____/|_____\___/ \____\___/   \___/
  */
 
-class BlocoO: public Bloco
+class BlocoO : public Bloco
 {
 
-public:
+  public:
     BlocoO();
     ~BlocoO();
 
@@ -167,10 +158,10 @@ public:
  * |____/|_____\___/ \____\___/  |____/
  */
 
-class BlocoS: public Bloco
+class BlocoS : public Bloco
 {
 
-public:
+  public:
     BlocoS();
     ~BlocoS();
 
@@ -185,10 +176,10 @@ public:
  * |____/|_____\___/ \____\___/    |_|
  */
 
-class BlocoT: public Bloco
+class BlocoT : public Bloco
 {
 
-public:
+  public:
     BlocoT();
     ~BlocoT();
 
@@ -203,10 +194,10 @@ public:
  * |____/|_____\___/ \____\___/  /____|
  */
 
-class BlocoZ: public Bloco
+class BlocoZ : public Bloco
 {
 
-public:
+  public:
     BlocoZ();
     ~BlocoZ();
 
