@@ -84,3 +84,5 @@ Thumbs.db
 .cache/
 build*/
 compile_commands*
+
+*.pcd

@@ -6,9 +6,20 @@ class Contato {
 public:
   std::string nome;
   int telefone;
-  Contato() {}
+  int *intList;
 
-  ~Contato() {}
+  Contato() {
+    std::cout << "Construtor do contato\n";
+    intList = new int[50];
+    intList[10] = 20;
+  }
+
+  ~Contato() {
+    std::cout << "Destrutor do contato\n";
+    std::cout << intList[10] << "\n";
+    delete[] intList;
+    // salvarContato();
+  }
 };
 
 class Agenda {
@@ -32,13 +43,12 @@ void fazAlgumaCoisa(); // Protótipo da função
 
 int main() {
   std::cout << "Iniciando teste...\n";
-  fazAlgumaCoisa();
-  do {
-    Contato a; // Construtor com argumentos
-    std::cout << "Meio do teste...\n";
-    std::cout << "Valor var = " << a.nome << "\n";
-  } while (false);
-  std::cout << "Fim do teste...\n";
+  while(true){
+    Contato contato; // Chama o construtor
+  }
+
+  // fazAlgumaCoisa();
+  // apagar o contato -> chamar o destrutor
 }
 
 void fazAlgumaCoisa() { std::cout << "Fazendo alguma coisa...\n"; }
