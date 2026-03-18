@@ -1,8 +1,11 @@
+#include <any>
 #include <cppdb/errors.h>
 #include <cppdb/frontend.h>
 #include <ctime>
 #include <iostream>
 #include <sstream>
+#include <type_traits>
+#include <variant>
 #include <vector>
 
 namespace robot_db {
@@ -26,27 +29,144 @@ typedef struct WiFiConfig {
 
 using namespace robot_db;
 
-template <typename DataT> class SQLSquema {
-public:
-  SQLSquema() {}
-  ~SQLSquema() {}
+using SQLDataTypes = std::variant<int, std::tm, std::string, bool, double>;
 
-  typedef struct ColumnInfo {
+class SQLSchema {
+public:
+  SQLSchema(const std::string _table, const std::string _uniqueKey) {
+    tableName = _table;
+    uniqueKeyName = _uniqueKey;
+  }
+  ~SQLSchema() {}
+
+  typedef struct Column {
+    std::string name;
     bool insert;
     bool update;
     bool isPrimary;
-  } ColumnInfo_t;
+    SQLDataTypes data;
+  } Column_t;
 
-  virtual const std::string table() = 0;
-  virtual const std::string uniqueKey() = 0;
+  std::string table() { return tableName; };
 
-  DataT getData() { return data; }
-  void setData(DataT &_data) { data = _data; }
+  void addColumn(std::string const &_name, bool _insert, bool _update,
+                 bool _isPrimary, SQLDataTypes _data) {
+
+    Column_t infoData;
+    infoData.name = _name;
+    infoData.insert = _insert;
+    infoData.update = _update;
+    infoData.isPrimary = _isPrimary;
+    infoData.data = _data;
+
+    columns.push_back(infoData);
+  }
+
+  std::string uniqueKey() { return uniqueKeyName; };
+  SQLDataTypes keyData() {
+    size_t index = 0;
+    for (Column_t const &n : columns) {
+      if (n.isPrimary) {
+        return columns.at(index).data;
+      }
+      index++;
+    }
+    return "";
+  };
+
+  std::string updateColumns() {
+    std::string col = "";
+    for (size_t n = 0; n < columns.size(); n++) {
+
+      if (columns.at(n).update == true) {
+
+        if (n < columns.size() - 1) {
+
+          col += columns.at(n).name + "=?, ";
+        } else {
+
+          col += columns.at(n).name + "=? ";
+        }
+      }
+    }
+    return col;
+  }
+
+  std::string insertColumns() {
+    std::string col = "(";
+    for (size_t n = 0; n < columns.size(); n++) {
+
+      if (columns.at(n).insert == true) {
+
+        if (n < columns.size() - 1) {
+
+          col += columns.at(n).name + ", ";
+        } else {
+
+          col += columns.at(n).name + ")";
+        }
+      }
+    }
+    return col;
+  }
+
+  std::string insertPlaceholders() {
+    std::string col = "(";
+    for (size_t n = 0; n < columns.size(); n++) {
+
+      if (columns.at(n).insert == true) {
+
+        if (n < columns.size() - 1) {
+
+          col += "?,";
+        } else {
+
+          col += "?)";
+        }
+      }
+    }
+    return col;
+  }
+
+  std::vector<SQLDataTypes> updateColumnsData() {
+    std::vector<SQLDataTypes> out;
+    for (size_t n = 0; n < columns.size(); n++) {
+
+      if (columns.at(n).update == true) {
+
+        out.push_back(columns.at(n).data);
+      }
+    }
+    return out;
+  }
+
+  std::vector<SQLDataTypes> insertColumnsData() {
+    std::vector<SQLDataTypes> out;
+    for (size_t n = 0; n < columns.size(); n++) {
+
+      if (columns.at(n).insert == true) {
+
+        out.push_back(columns.at(n).data);
+      }
+    }
+    return out;
+  }
+
+  // std::vector<SQLDataTypes> getData() { return data; }
+  void setData(std::vector<SQLDataTypes> &_data) {
+    if (_data.size() != columns.size()) {
+      return;
+    }
+    for (size_t n = 0; n < columns.size(); n++) {
+      columns.at(n).data = _data.at(n);
+    }
+  }
 
 private:
-  std::vector<std::string> columns;
-  std::vector<ColumnInfo_t> info;
-  DataT data;
+  std::string tableName;
+  std::string uniqueKeyName;
+
+  std::vector<Column_t> columns;
 };
 
 class RobotSQLManager {
@@ -88,6 +208,36 @@ public:
       return run(_config.ssid, _config.password, _config.created,
                  _config.updated);
     }
+  }
+
+  bool addSchemaData(SQLSchema *_schema, bool _allowUpdate = false) {
+    std::vector<SQLDataTypes> data;
+    if (exists(_schema->table(), _schema->uniqueKey(), _schema->keyData())) {
+      if (_allowUpdate) {
+        std::cout << "Entry already exists, updating data in DB\n";
+        prepare("UPDATE " + _schema->table() + " SET " +
+                _schema->updateColumns() + "WHERE " + _schema->uniqueKey() +
+                "=?");
+
+        data = _schema->updateColumnsData();
+      } else {
+        std::cerr << "Entry already exists in table!\n";
+        return false;
+      }
+    } else {
+      prepare("INSERT INTO " + _schema->table() + _schema->insertColumns() +
+              " VALUES" + _schema->insertPlaceholders());
+
+      data = _schema->insertColumnsData();
+    }
+
+    for (SQLDataTypes const &_d : data) {
+      if (!bindAny(_d)) {
+        std::cerr << "Failed to bind value to statement!\n";
+      }
+    }
+    bindAny(_schema->keyData());
+    return run();
   }
 
   bool removeWiFiConfig(std::string const &_ssid) {
@@ -147,7 +297,7 @@ private:
   cppdb::statement stat;
 
   bool exists(std::string const &_table, std::string const &_key,
-              std::string const &_value) {
+              SQLDataTypes const &_value) {
     prepare("SELECT 1 FROM " + _table + " WHERE " + _key + "=?");
     cppdb::result res = runQuery(_value);
 
@@ -156,8 +306,8 @@ private:
         return true;
       }
     } catch (cppdb::cppdb_error const &e) {
-      std::cerr << "Failed to check if " << _value << " exists in table("
-                << _table << ") at column(" << _key << ")\n";
+      std::cerr << "Failed to check if key exists in table(" << _table
+                << ") at column(" << _key << ")\n";
       std::cerr << "Returning true for safety\n";
       return true;
     }
@@ -165,6 +315,7 @@ private:
   }
 
   void prepare(std::string const &_statement) {
+    // std::cout << "\t-- Preparing <" << _statement << ">\n";
     stat = currentSession->create_statement(_statement);
   }
 
@@ -172,15 +323,40 @@ private:
     return *currentSession << _query.c_str();
   }
 
+  bool bindAny(SQLDataTypes const &_value) {
+    try {
+      std::visit([this](auto &&arg) { this->stat.bind(arg); }, _value);
+      return true;
+    } catch (const cppdb::cppdb_error &e) {
+      std::cerr << "Bind error: " << e.what() << "\n";
+      return false;
+    }
+  }
+
   template <typename T, typename... Args>
   cppdb::result runQuery(T first, Args... args) {
-    try {
-      stat.bind(first);
-    } catch (cppdb::cppdb_error const &e) {
-      std::cerr << "Statement Bind ERROR: " << e.what() << std::endl;
-      std::cerr << "Make sure to run prepare() before runQuery()!\n";
-      return cppdb::result();
+    bool ok = false;
+
+    SQLDataTypes dummy = 0;
+    if constexpr (std::is_same_v<decltype(first), decltype(dummy)>) {
+      bindAny(first);
     }
+
+    if (!ok) {
+      try {
+        const std::string dummy = "";
+        if constexpr (std::is_same_v<decltype(first), decltype(dummy)>) {
+          std::cout << "Binding value: " << first << "\n";
+          stat.bind(first);
+        }
+        ok = true;
+      } catch (cppdb::cppdb_error const &e) {
+        std::cerr << "Statement Bind ERROR: " << e.what() << std::endl;
+        std::cerr << "Make sure to run prepare() before runQuery()!\n";
+        return cppdb::result();
+      }
+    }
+
     return runQuery(args...);
   }
 
@@ -199,15 +375,18 @@ private:
     }
   }
 
-  template <typename T, typename... Args> bool run(T first, Args... args) {
+  template <typename... Args> bool run(Args &&...args) {
     try {
-      stat.bind(first);
+      // Fold expression para dar bind em todos os argumentos
+      (stat.bind(std::forward<Args>(args)), ...);
+      stat.exec();
+      stat.reset();
+      return true;
     } catch (cppdb::cppdb_error const &e) {
       std::cerr << "Statement Bind ERROR: " << e.what() << std::endl;
       std::cerr << "Make sure to run prepare() before run()!\n";
       return false;
     }
-    return run(args...);
   }
 
   bool run() {
@@ -215,7 +394,6 @@ private:
       stat.exec();
       // std::cout << "ID: " << stat.last_insert_id() << "\n";
       // std::cout << "Affected rows: " << stat.affected() << "\n";
-
       stat.reset();
       return true;
 
@@ -235,23 +413,42 @@ int main(int argc, char *argv[]) {
   bool ok = dbManager.init("setup_management", "postgres", "postgres");
   std::cout << "Manager Init OK=" << ok << "\n";
 
+  SQLSchema schema("wifi_profiles", "ssid");
+  schema.addColumn("ssid", true, true, true, "");
+  schema.addColumn("password", true, true, false, "");
+  schema.addColumn("created_at", true, false, false, std::tm());
+  schema.addColumn("updated_at", true, true, false, std::tm());
+
+  std::cout << "Schema: " << schema.table() << ", " << schema.uniqueKey()
+            << ", UPC:" << schema.updateColumns()
+            << ", PLH:" << schema.insertPlaceholders()
+            << ", ICC:" << schema.insertColumns() << "\n";
+
   if (ok) {
     WiFiConfig_t cfg;
     cfg.ssid = "SOCIALDROIDS";
     cfg.password = "Slinky";
     std::time_t now = std::time(0);
     cfg.created = *std::localtime(&now);
-    cfg.updated = cfg.created;
-    // dbManager.addWiFiConfig(cfg, ALLOW_UPDATE);
+    cfg.updated = *std::localtime(&now);
+    dbManager.addWiFiConfig(cfg, ALLOW_UPDATE);
 
-    // dbManager.removeWiFiConfig("SOCIALDROIDS");
-
-    cfg = dbManager.getWiFiConfig("SOCIALDROIDS");
-    if (cfg.ssid != "") {
-      cfg.show();
-    } else {
-      std::cerr << "Failed to get WiFi Config\n";
+    std::vector<SQLDataTypes> data = {"SD", "senha123", *std::localtime(&now),
+                                      *std::localtime(&now)};
+    schema.setData(data);
+    if (!dbManager.addSchemaData(&schema, ALLOW_UPDATE)) {
+      std::cerr << "Failed to add data!\n";
     }
+
+    // dbManager.getAllWiFiConfigs();
+    // dbManager.removeWiFiConfig("Socialdroids");
+
+    // cfg = dbManager.getWiFiConfig("SOCIALDROIDS");
+    // if (cfg.ssid != "") {
+    //   cfg.show();
+    // } else {
+    //   std::cerr << "Failed to get WiFi Config\n";
+    // }
 
     dbManager.getAllWiFiConfigs();
   }
