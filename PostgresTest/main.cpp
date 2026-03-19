@@ -573,7 +573,118 @@ private:
     }
 };
 
+class WiFiDB
+{
+public:
+    WiFiDB(SQLManager* _manager) : db(_manager), sc("wifi_profiles", "ssid")
+    {
+        // insert, update, primary
+        sc.addColumn("ssid", SQLDataType::String, true, true, true);
+        sc.addColumn("password", SQLDataType::String, true, true, false);
+        sc.addColumn("created_at", SQLDataType::DateTime, true, false, false);
+        sc.addColumn("updated_at", SQLDataType::DateTime, true, true, false);
+    }
+
+    ~WiFiDB()
+    {
+    }
+
+    bool saveConfig(std::string const& _ssid, std::string const& _pwd)
+    {
+        std::time_t now = std::time(0);
+        SQLEntry profile;
+        profile.setValue("ssid", _ssid);
+        profile.setValue("password", _pwd);
+        profile.setValue("created_at", *std::localtime(&now));
+        profile.setValue("updated_at", *std::localtime(&now));
+
+        if (db->insert(&sc, &profile) == false)
+        {
+            SQLConditionMap conditions;
+            conditions["ssid"] = std::string(_ssid);
+            return db->update(&sc, &profile, conditions);
+        }
+        return true;
+    }
+
+    bool removeConfig(std::string const& _ssid, std::string const& _pwd)
+    {
+        SQLConditionMap conditions;
+        conditions["ssid"] = std::string(_ssid);
+        if (_pwd != "")
+        {
+            conditions["password"] = std::string(_pwd);
+        }
+        return db->remove(&sc, conditions);
+    }
+
+    std::string getPassword(std::string const& _ssid)
+    {
+        std::vector<std::string> cols = {"password"};
+        SQLConditionMap conditions;
+        conditions["ssid"] = std::string(_ssid);
+        std::vector<SQLEntry> results = db->get(&sc, cols, conditions);
+        if (results.size() > 1)
+        {
+            std::cout << "More than one profile with the same SSID! Returning "
+                         "first\n";
+            return std::get<std::string>(results.at(0).getValue("password"));
+        }
+        return "";
+    }
+
+    typedef struct WiFiConfig
+    {
+        std::string ssid;
+        std::string password;
+    } WiFiConfig;
+
+    std::vector<WiFiConfig> getWiFiEntries()
+    {
+        std::vector<WiFiConfig> entries;
+
+        std::vector<SQLEntry> results = db->getAllEntries(&sc);
+        for (const auto& entry : results)
+        {
+            // std::tm c = std::get<std::tm>(entry.getValue("created_at"));
+            // std::tm u = std::get<std::tm>(entry.getValue("updated_at"));
+            // std::cout << "--> Found:\n";
+            // std::cout << "\tSSID: " << entry.getValue("ssid")
+            //           << ", PWD: " << entry.getValue("password")
+            //           << ",\n\tCREATED: " << asctime(&c)
+            //           << "\tUPDATED: " << asctime(&u);
+            // std::cout << "<--\n";
+            entries.push_back(
+                {std::get<std::string>(entry.getValue("ssid")),
+                 std::get<std::string>(entry.getValue("password"))});
+        }
+        return entries;
+    }
+
+private:
+    SQLManager* db;
+    SQLSchema sc;
+};
+
 int main(int argc, char* argv[])
+{
+    SQLManager dbManager;
+    bool ok = dbManager.init("setup_management", "postgres", "postgres");
+
+    WiFiDB wifiDB(&dbManager);
+
+    // wifiDB.saveConfig("SOCIADLROIDS2", "Slinky2027");
+    wifiDB.removeConfig("SOCIADLROIDS2", "Slinky2027");
+    for (const auto& config : wifiDB.getWiFiEntries())
+    {
+        std::cout << "Entry - SSID = " << config.ssid
+                  << " | PWD = " << config.password << "\n";
+    }
+
+    return 0;
+}
+
+int test_main(int argc, char* argv[])
 {
     SQLManager dbManager;
     bool ok = dbManager.init("setup_management", "postgres", "postgres");
