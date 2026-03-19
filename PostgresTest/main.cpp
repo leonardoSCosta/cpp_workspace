@@ -1,6 +1,7 @@
 #include <any>
 #include <cppdb/errors.h>
 #include <cppdb/frontend.h>
+#include <cstdint>
 #include <ctime>
 #include <iostream>
 #include <sstream>
@@ -13,19 +14,35 @@
 // INFO:
 // short -> bool
 // Não existe fetch(bool arg) no cppdb
-using SQLData = std::variant<int, std::tm, std::string, short, double>;
+using SQLData = std::variant<int, std::tm, std::string, short, double,
+                             long long, std::vector<uint8_t>>;
+using SQLConditionMap = std::unordered_map<std::string, SQLData>;
 enum class SQLDataType
 {
     Int,      // int
     DateTime, // std::tm
     String,   // std::string
     Short,    // short
-    Double    // double
+    Double,   // double
+    BigInt,   // long long (int64_t)
+    Blob,     // std::vector<uint8_t>
 };
 
 std::ostream& operator<<(std::ostream& os, const SQLData& v)
 {
-    std::visit([&os](auto&& arg) { os << arg; }, v);
+    std::visit(
+        [&os](auto&& arg) {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, std::vector<uint8_t>>)
+            {
+                os << "[BLOB data: " << arg.size() << " bytes]";
+            }
+            else
+            {
+                os << arg;
+            }
+        },
+        v);
     return os;
 }
 
@@ -66,71 +83,6 @@ public:
         return uniqueKeyName;
     };
 
-    std::string updateStatement() const
-    {
-        std::string statement = "UPDATE " + table() + " SET ";
-        for (size_t n = 0; n < columns.size(); n++)
-        {
-            if (columns.at(n).update == true)
-            {
-                if (n < columns.size() - 1)
-                {
-                    statement += columns.at(n).name + "=?, ";
-                }
-                else
-                {
-                    statement += columns.at(n).name + "=? ";
-                }
-            }
-        }
-        statement += "WHERE " + uniqueKey() + "=?";
-        return statement;
-    }
-
-    std::string insertStatement() const
-    {
-        std::string statement = "INSERT INTO " + table() + "(";
-        std::string placeholders = " VALUES(";
-        for (size_t n = 0; n < columns.size(); n++)
-        {
-            if (columns.at(n).insert == true)
-            {
-                if (n < columns.size() - 1)
-                {
-                    statement += columns.at(n).name + ", ";
-                    placeholders += "?,";
-                }
-                else
-                {
-                    statement += columns.at(n).name + ")";
-                    placeholders += "?)";
-                }
-            }
-        }
-        statement += placeholders;
-        return statement;
-    }
-
-    std::string deleteStatement() const
-    {
-        std::string statement =
-            "DELETE FROM " + table() + " WHERE " + uniqueKey() + "=?";
-        return statement;
-    }
-
-    std::string selectStatement() const
-    {
-        std::string statement =
-            "SELECT * FROM " + table() + " WHERE " + uniqueKey() + "=?";
-        return statement;
-    }
-
-    std::string selectAllStatement() const
-    {
-        std::string statement = "SELECT * FROM " + table();
-        return statement;
-    }
-
     const std::vector<Column_t>& getColumns() const
     {
         return columns;
@@ -166,29 +118,6 @@ public:
             return it->second;
         }
         throw std::invalid_argument("Undefined column: " + columnName);
-    }
-
-    std::vector<SQLData> getValues(const SQLSchema* _schema,
-                                   SQL_ENTRY_GET_TYPES _type)
-    {
-        std::vector<SQLData> values;
-
-        for (const SQLSchema::Column_t& column : _schema->getColumns())
-        {
-            if ((_type == UPDATE && column.update) ||
-                (_type == INSERT && column.insert))
-            {
-                values.push_back(getValue(column.name));
-            }
-        }
-
-        // Valor extra para o placeholder do ...WHERE <UNIQUE_KEY> =?
-        if (_type == UPDATE)
-        {
-            values.push_back(getValue(_schema->uniqueKey()));
-        }
-
-        return values;
     }
 
     bool hasColumn(const std::string& columnName) const
@@ -232,229 +161,340 @@ public:
 
     bool insert(SQLSchema* _schema, SQLEntry* _entry)
     {
-        std::vector<SQLData> data;
-        if (exists(_schema->table(), _schema->uniqueKey(),
-                   _entry->getValue(_schema->uniqueKey())))
+        std::string columnsStr = "";
+        std::string valuesStr = "";
+        std::vector<SQLData> bindValues;
+
+        bool first = true;
+        for (const auto& col : _schema->getColumns())
         {
-            std::cerr << "Entry already exists in table!\n";
-            return false;
-        }
-        else
-        {
-            prepare(_schema->insertStatement());
-            for (SQLData const& _d :
-                 _entry->getValues(_schema, SQLEntry::INSERT))
+            // Insere apenas se o schema permite e se o usuário forneceu o dado
+            if (col.insert && _entry->hasColumn(col.name))
             {
-                if (!bindAny(_d))
+                if (!first)
                 {
-                    std::cerr << "Failed to bind value to statement!\n";
+                    columnsStr += ", ";
+                    valuesStr += ", ";
                 }
+                columnsStr += col.name;
+                valuesStr += "?";
+                bindValues.push_back(_entry->getValue(col.name));
+                first = false;
             }
         }
 
-        return run();
-    }
-
-    bool update(SQLSchema* _schema, SQLEntry* _entry)
-    {
-        if (exists(_schema->table(), _schema->uniqueKey(),
-                   _entry->getValue(_schema->uniqueKey())))
+        if (columnsStr.empty())
         {
-            std::cout << "Entry exists, updating data in DB\n";
-            prepare(_schema->updateStatement());
-            for (SQLData const& _d :
-                 _entry->getValues(_schema, SQLEntry::UPDATE))
+            std::cerr << "Insert aborted: No valid columns to insert.\n";
+            return false;
+        }
+
+        std::string statement = "INSERT INTO " + _schema->table() + " (" +
+                                columnsStr + ") VALUES (" + valuesStr + ")";
+        prepare(statement);
+
+        for (const auto& val : bindValues)
+        {
+            if (!bindAny(val))
             {
-                if (!bindAny(_d))
-                {
-                    std::cerr << "Failed to bind value to statement!\n";
-                }
+                std::cerr << "Failed to bind value to insert statement!\n";
+                return false;
             }
         }
-        else
+
+        int affected = run();
+        if (affected == 0)
         {
-            std::cerr << "Entry not found in table! Insert it first\n";
+            std::cerr << "Update skipped: Entry not found or conditions didn't "
+                         "match.\n";
             return false;
         }
 
-        return run();
+        return affected > 0;
     }
 
-    bool remove(SQLSchema* _schema, SQLData _uniqueValue)
+    bool update(SQLSchema* _schema, SQLEntry* _entry,
+                const std::unordered_map<std::string, SQLData>& conditions)
     {
-        if (not exists(_schema->table(), _schema->uniqueKey(), _uniqueValue))
+        if (conditions.empty())
         {
-            std::cerr << "Entry not found!\n";
+            std::cerr << "Update aborted: conditions map is empty (prevents "
+                         "accidental full table update).\n";
             return false;
         }
-        else
-        {
-            std::cout << "Found entry! Deleting from DB.\n";
-            prepare(_schema->deleteStatement());
-            bindAny(_uniqueValue);
-            return run();
-        }
-    }
 
-    bool remove(SQLSchema* _schema, SQLEntry* _entry)
-    {
-        // TODO: Permitir que a exclusão considere múltiplas chaves primárias
-        if (not exists(_schema->table(), _schema->uniqueKey(),
-                       _entry->getValue(_schema->uniqueKey())))
-        {
-            std::cerr << "Entry not found!\n";
-            return false;
-        }
-        else
-        {
-            std::cout << "Found entry! Deleting from DB.\n";
-            prepare(_schema->deleteStatement());
-            bindAny(_entry->getValue(_schema->uniqueKey()));
-            return run();
-        }
-    }
+        std::string statement = "UPDATE " + _schema->table() + " SET ";
+        std::vector<SQLData> bindValues;
 
-    SQLEntry getEntry(SQLSchema* _schema, SQLData _uniqueValue)
-    {
-        SQLEntry data;
-        if (not exists(_schema->table(), _schema->uniqueKey(), _uniqueValue))
+        // Build SET
+        bool firstSet = true;
+        for (const auto& col : _schema->getColumns())
         {
-            std::cerr << "Entry not found!\n";
-        }
-        else
-        {
-            std::cout << "Found entry! Returning from DB.\n";
-            prepare(_schema->selectStatement());
-            cppdb::result res = runQuery(_uniqueValue);
-
-            if (res.next())
+            // Atualiza apenas se a coluna permite update e o SQLEntry contém
+            // esse dado
+            if (col.update && _entry->hasColumn(col.name))
             {
-                for (const auto& col : _schema->getColumns())
+                if (!firstSet)
                 {
-                    try
-                    {
-                        switch (col.type)
-                        {
-                        case SQLDataType::Int:
-                            data.setValue(col.name, res.get<int>(col.name));
-                            break;
-
-                        case SQLDataType::String:
-                            data.setValue(col.name,
-                                          res.get<std::string>(col.name));
-                            break;
-
-                        case SQLDataType::DateTime:
-                            data.setValue(col.name, res.get<std::tm>(col.name));
-                            break;
-
-                        case SQLDataType::Short:
-                            data.setValue(col.name, res.get<short>(col.name));
-                            break;
-
-                        case SQLDataType::Double:
-                            data.setValue(col.name, res.get<double>(col.name));
-                            break;
-                        }
-                    }
-                    catch (const cppdb::bad_value_cast& e)
-                    {
-                        std::cerr << "Column data conversion error " << col.name
-                                  << ". Database type different from expected."
-                                  << e.what() << "\n";
-                    }
-                    catch (const std::exception& e)
-                    {
-                        std::cerr << "Warning: Column '" << col.name
-                                  << "' not found in SELECT result." << e.what()
-                                  << "\n";
-                    }
+                    statement += ", ";
                 }
+                statement += col.name + "=?";
+                bindValues.push_back(_entry->getValue(col.name));
+                firstSet = false;
             }
         }
-        return data;
+
+        // Build WHERE
+        statement += " WHERE ";
+        bool firstWhere = true;
+        for (const auto& [colName, val] : conditions)
+        {
+            if (!firstWhere)
+            {
+                statement += " AND ";
+            }
+            statement += colName + "=?";
+            bindValues.push_back(val);
+            firstWhere = false;
+        }
+
+        prepare(statement);
+        for (const SQLData& val : bindValues)
+        {
+            if (!bindAny(val))
+            {
+                std::cerr << "Failed to bind value to update statement!\n";
+                return false;
+            }
+        }
+        int affected = run();
+        if (affected == 0)
+        {
+            std::cerr << "Update skipped: Entry not found or conditions didn't "
+                         "match.\n";
+            return false;
+        }
+
+        return affected > 0;
+    }
+
+    bool remove(SQLSchema* _schema,
+                const std::unordered_map<std::string, SQLData>& conditions)
+    {
+        if (conditions.empty())
+        {
+            std::cerr << "Remove aborted: conditions map is empty (prevents "
+                         "accidental full table drop).\n";
+            return false;
+        }
+
+        std::string statement = "DELETE FROM " + _schema->table() + " WHERE ";
+        std::vector<SQLData> bindValues;
+
+        bool first = true;
+        for (const auto& [colName, val] : conditions)
+        {
+            if (!first)
+                statement += " AND ";
+            statement += colName + "=?";
+            bindValues.push_back(val);
+            first = false;
+        }
+
+        prepare(statement);
+        for (const auto& val : bindValues)
+        {
+            if (!bindAny(val))
+            {
+                std::cerr << "Failed to bind value to delete statement!\n";
+                return false;
+            }
+        }
+
+        int affected = run();
+        if (affected == 0)
+        {
+            std::cerr << "Delete skipped: Entry not found or conditions didn't "
+                         "match.\n";
+            return false;
+        }
+
+        return affected > 0;
+    }
+
+    std::vector<SQLEntry> get(SQLSchema* _schema,
+                              const std::vector<std::string>& columnsToSelect,
+                              const SQLConditionMap& conditions)
+    {
+        std::string selectCols = "";
+
+        // Build SELECT
+        if (columnsToSelect.empty())
+        {
+            selectCols = "*";
+        }
+        else
+        {
+            bool firstCol = true;
+            for (const auto& c : columnsToSelect)
+            {
+                if (!firstCol)
+                    selectCols += ", ";
+                selectCols += c;
+                firstCol = false;
+            }
+        }
+
+        std::string statement =
+            "SELECT " + selectCols + " FROM " + _schema->table();
+        std::vector<SQLData> bindValues;
+
+        // Build WHERE
+        if (!conditions.empty())
+        {
+            statement += " WHERE ";
+            bool firstCond = true;
+            for (const auto& [colName, val] : conditions)
+            {
+                if (!firstCond)
+                    statement += " AND ";
+                statement += colName + "=?";
+                bindValues.push_back(val);
+                firstCond = false;
+            }
+        }
+
+        return customQuery(statement, bindValues, _schema);
     }
 
     std::vector<SQLEntry> getAllEntries(SQLSchema* _schema)
     {
+        return get(_schema, {}, {});
+    }
+
+    /**
+     * @brief Realiza uma query customizável
+     *
+     * Exemplo:
+     * @code
+     *  std::vector<SQLEntry> cEntry = dbManager.customQuery(
+     *      "SELECT ssid,password FROM wifi_profiles WHERE ssid=?",
+     *      {std::string("SD")}, &schema);
+     *  if (not cEntry.empty())
+     *  {
+     *      std::cout << "\tSSID: " << cEntry.at(0).getValue("ssid")
+     *                << ", PWD: " << cEntry.at(0).getValue("password") << "\n";
+     *  }
+     * @endcode
+     *
+     * @param _queryStr SQL query.
+     * @param _params Parâmetros para os placeholders.
+     * @param _schema
+     * @return Array com os resultados da query.
+     */
+    std::vector<SQLEntry> customQuery(const std::string& _queryStr,
+                                      const std::vector<SQLData>& _params,
+                                      SQLSchema* _schema)
+    {
         std::vector<SQLEntry> entries;
-        SQLEntry data;
-        prepare(_schema->selectAllStatement());
-        cppdb::result res = runQuery();
+        prepare(_queryStr);
+
+        for (const SQLData& param : _params)
+        {
+            if (!bindAny(param))
+            {
+                std::cerr << "Failed to bind parameter to custom query!\n";
+                return entries;
+            }
+        }
+
+        cppdb::result res;
+        try
+        {
+            res = stat.query();
+        }
+        catch (cppdb::cppdb_error const& e)
+        {
+            std::cerr << "Custom Query ERROR: " << e.what() << std::endl;
+            stat.reset();
+            return entries;
+        }
+
+        // Verify returned cols
+        int num_cols = res.cols();
+        std::vector<std::string> returned_cols;
+        for (int i = 0; i < num_cols; ++i)
+        {
+            returned_cols.push_back(res.name(i));
+        }
+
+        // Map types
+        std::unordered_map<std::string, SQLDataType> typeMap;
+        for (const auto& col : _schema->getColumns())
+        {
+            typeMap[col.name] = col.type;
+        }
 
         while (res.next())
         {
-            for (const auto& col : _schema->getColumns())
+            SQLEntry data;
+            for (const std::string& colName : returned_cols)
             {
+                auto it = typeMap.find(colName);
+                if (it == typeMap.end())
+                {
+                    std::cerr << "Warning: Returned column '" << colName
+                              << "' is not defined in Schema.\n";
+                    continue;
+                }
+
                 try
                 {
-                    switch (col.type)
+                    switch (it->second)
                     {
                     case SQLDataType::Int:
-                        data.setValue(col.name, res.get<int>(col.name));
+                        data.setValue(colName, res.get<int>(colName));
                         break;
-
                     case SQLDataType::String:
-                        data.setValue(col.name, res.get<std::string>(col.name));
+                        data.setValue(colName, res.get<std::string>(colName));
                         break;
-
                     case SQLDataType::DateTime:
-                        data.setValue(col.name, res.get<std::tm>(col.name));
+                        data.setValue(colName, res.get<std::tm>(colName));
                         break;
-
                     case SQLDataType::Short:
-                        data.setValue(col.name, res.get<short>(col.name));
+                        data.setValue(colName, res.get<short>(colName));
                         break;
-
                     case SQLDataType::Double:
-                        data.setValue(col.name, res.get<double>(col.name));
+                        data.setValue(colName, res.get<double>(colName));
                         break;
+                    case SQLDataType::BigInt:
+                        data.setValue(colName, res.get<long long>(colName));
+                        break;
+                    case SQLDataType::Blob: {
+                        std::string blobStr = res.get<std::string>(colName);
+                        std::vector<uint8_t> blobData(blobStr.begin(),
+                                                      blobStr.end());
+                        data.setValue(colName, blobData);
+                        break;
+                    }
                     }
                 }
                 catch (const cppdb::bad_value_cast& e)
                 {
-                    std::cerr << "Column data conversion error " << col.name
-                              << ". Database type different from expected."
-                              << e.what() << "\n";
-                }
-                catch (const std::exception& e)
-                {
-                    std::cerr << "Warning: Column '" << col.name
-                              << "' not found in SELECT result." << e.what()
-                              << "\n";
+                    std::cerr << "Column conversion error for " << colName
+                              << ": " << e.what() << "\n";
                 }
             }
             entries.push_back(data);
         }
+
+        stat.reset();
         return entries;
     }
 
 private:
     std::unique_ptr<cppdb::session> currentSession;
     cppdb::statement stat;
-
-    bool exists(std::string const& _table, std::string const& _key,
-                SQLData const& _value)
-    {
-        prepare("SELECT 1 FROM " + _table + " WHERE " + _key + "=?");
-        cppdb::result res = runQuery(_value);
-
-        try
-        {
-            if (res.next())
-            {
-                return true;
-            }
-        }
-        catch (cppdb::cppdb_error const& e)
-        {
-            std::cerr << "Failed to check if key exists in table(" << _table
-                      << ") at column(" << _key << ")\n";
-            std::cerr << "Returning true for safety\n";
-            return true;
-        }
-        return false;
-    }
 
     void prepare(std::string const& _statement)
     {
@@ -466,7 +506,20 @@ private:
     {
         try
         {
-            std::visit([this](auto&& arg) { this->stat.bind(arg); }, _value);
+            std::visit(
+                [this](auto&& arg) {
+                    using T = std::decay_t<decltype(arg)>;
+                    if constexpr (std::is_same_v<T, std::vector<uint8_t>>)
+                    {
+                        std::string blobStr(arg.begin(), arg.end());
+                        this->stat.bind(blobStr);
+                    }
+                    else
+                    {
+                        this->stat.bind(arg);
+                    }
+                },
+                _value);
             return true;
         }
         catch (const cppdb::cppdb_error& e)
@@ -501,24 +554,22 @@ private:
         }
     }
 
-    bool run()
+    int run()
     {
         try
         {
             stat.exec();
             // std::cout << "ID: " << stat.last_insert_id() << "\n";
-            // std::cout << "Affected rows: " << stat.affected() << "\n";
+            int affectedRows = stat.affected();
             stat.reset();
-            return true;
+            return affectedRows;
         }
         catch (cppdb::cppdb_error const& e)
         {
             std::cerr << "Statement Run ERROR: " << e.what() << std::endl;
             stat.reset();
-            return false;
+            return -1;
         }
-
-        return true;
     }
 };
 
@@ -548,26 +599,35 @@ int main(int argc, char* argv[])
         profile.setValue("created_at", *std::localtime(&now));
         profile.setValue("updated_at", *std::localtime(&now));
 
-        if (!dbManager.update(&schema, &profile))
+        SQLConditionMap conditions;
+        conditions["ssid"] = std::string("SD");
+        if (dbManager.update(&schema, &profile, conditions))
+        // if (dbManager.insert(&schema, &profile))
         {
-            std::cerr << "Failed to add data!\n";
-            // dbManager.remove(&schema, "SD");
+            std::cerr << "Entry added to DB!\n";
+            // dbManager.remove(&schema, conditions);
         }
 
-        SQLEntry dbEntry = dbManager.getEntry(&schema, "SD");
-        if (dbEntry.hasColumn("ssid"))
-        {
-            std::tm c = std::get<std::tm>(dbEntry.getValue("created_at"));
-            std::tm u = std::get<std::tm>(dbEntry.getValue("updated_at"));
+        std::vector<std::string> cols = {"ssid", "password", "created_at",
+                                         "updated_at"};
 
-            std::cout << "\tSSID: " << dbEntry.getValue("ssid")
-                      << ", PWD: " << dbEntry.getValue("password")
+        std::vector<SQLEntry> results =
+            dbManager.get(&schema, cols, conditions);
+        for (const auto& entry : results)
+        {
+            std::tm c = std::get<std::tm>(entry.getValue("created_at"));
+            std::tm u = std::get<std::tm>(entry.getValue("updated_at"));
+
+            std::cout << "--- GET\n";
+            std::cout << "\tSSID: " << entry.getValue("ssid")
+                      << ", PWD: " << entry.getValue("password")
                       << ",\n\tCREATED: " << asctime(&c)
                       << "\tUPDATED: " << asctime(&u) << "\n\n";
         }
 
-        std::vector<SQLEntry> entries = dbManager.getAllEntries(&schema);
-        for (const auto& entry : entries)
+        results = dbManager.getAllEntries(&schema);
+        std::cout << "--- GET ALL\n";
+        for (const auto& entry : results)
         {
             std::tm c = std::get<std::tm>(entry.getValue("created_at"));
             std::tm u = std::get<std::tm>(entry.getValue("updated_at"));
@@ -578,6 +638,22 @@ int main(int argc, char* argv[])
                       << ",\n\tCREATED: " << asctime(&c)
                       << "\tUPDATED: " << asctime(&u);
             std::cout << "<--\n";
+        }
+
+        std::cout << "--- Teste Custom ---\n";
+
+        std::vector<SQLEntry> cEntry = dbManager.customQuery(
+            "SELECT ssid,password FROM wifi_profiles WHERE ssid=?",
+            {std::string("SD")}, &schema);
+        if (not cEntry.empty())
+        {
+            // std::tm c =
+            // std::get<std::tm>(cEntry.at(0).getValue("created_at")); std::tm u
+            // = std::get<std::tm>(cEntry.at(0).getValue("updated_at"));
+            std::cout << "\tSSID: " << cEntry.at(0).getValue("ssid")
+                      << ", PWD: " << cEntry.at(0).getValue("password") << "\n";
+            // << ",\n\tCREATED: " << asctime(&c)
+            // << "\tUPDATED: " << asctime(&u) << "\n\n";
         }
     }
 
