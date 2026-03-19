@@ -10,28 +10,6 @@
 #include <variant>
 #include <vector>
 
-namespace robot_db
-{
-
-typedef struct WiFiConfig
-{
-    std::string ssid;
-    std::string password;
-    std::tm created;
-    std::tm updated;
-
-    void show()
-    {
-        std::cout << "\tSSID: " << this->ssid << ", PWD: " << this->password
-                  << ",\n\tCREATED: " << asctime(&this->created)
-                  << "\tUPDATED: " << asctime(&this->updated) << "";
-    }
-} WiFiConfig_t;
-
-} // namespace robot_db
-
-using namespace robot_db;
-
 // INFO:
 // short -> bool
 // Não existe fetch(bool arg) no cppdb
