@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.7)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Dependencies
 # sudo apt install libcppdb-dev libcppdb-postgresql0  
 
 project(PostgresTest)
+include_directories(include)
 
 find_library(CPPDB_LIB cppdb)
 if(NOT CPPDB_LIB)
