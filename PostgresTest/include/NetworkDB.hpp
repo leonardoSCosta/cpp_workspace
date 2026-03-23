@@ -13,6 +13,15 @@ public:
         string password;
         tm created_at;
         tm updated_at;
+
+        friend std::ostream& operator<<(std::ostream& os, const WiFiConfig& v)
+        {
+            os << "WiFiConfig = {SSID: " << v.ssid
+               << ", Password: " << v.password
+               << ", Created At: " << asctime(&v.created_at)
+               << "\tUpdated At: " << asctime(&v.updated_at) << "}\n";
+            return os;
+        }
     } WiFiConfig;
 
     WiFiDB(SQLManager* _manager, const string& _table,
@@ -85,16 +94,10 @@ public:
         vector<SQLEntry> results = db->getAllEntries(&sc);
         for (const auto& entry : results)
         {
-            // tm c = get<tm>(entry.getValue("created_at"));
-            // tm u = get<tm>(entry.getValue("updated_at"));
-            // cout << "--> Found:\n";
-            // cout << "\tSSID: " << entry.getValue("ssid")
-            //           << ", PWD: " << entry.getValue("password")
-            //           << ",\n\tCREATED: " << asctime(&c)
-            //           << "\tUPDATED: " << asctime(&u);
-            // cout << "<--\n";
             entries.push_back({get<string>(entry.getValue("ssid")),
-                               get<string>(entry.getValue("password"))});
+                               get<string>(entry.getValue("password")),
+                               get<tm>(entry.getValue("created_at")),
+                               get<tm>(entry.getValue("updated_at"))});
         }
         return entries;
     }
@@ -112,6 +115,16 @@ public:
         string password;
         tm created_at;
         tm updated_at;
+
+        friend std::ostream& operator<<(std::ostream& os,
+                                        const HotspotSettings& v)
+        {
+            os << "HotspotSettings = {ID: " << v.id << ", SSID: " << v.ssid
+               << ", Password: " << v.password
+               << ", Created At: " << asctime(&v.created_at)
+               << "\tUpdated At: " << asctime(&v.updated_at) << "}\n";
+            return os;
+        }
     } HotspotSettings;
 
     HotspotSettingsDB(SQLManager* _manager, const string& _table,
@@ -172,7 +185,7 @@ public:
             out.ssid = get<string>(results.at(0).getValue("ssid"));
             out.password = get<string>(results.at(0).getValue("password"));
             out.created_at = get<tm>(results.at(0).getValue("created_at"));
-            out.updated_at = get<tm>(results.at(0).getValue("update_at"));
+            out.updated_at = get<tm>(results.at(0).getValue("updated_at"));
         }
         return out;
     }
@@ -189,7 +202,7 @@ public:
                                get<string>(entry.getValue("ssid")),
                                get<string>(entry.getValue("password")),
                                get<tm>(entry.getValue("created_at")),
-                               get<tm>(entry.getValue("update_at"))});
+                               get<tm>(entry.getValue("updated_at"))});
         }
         return entries;
     }

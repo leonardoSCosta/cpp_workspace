@@ -10,7 +10,7 @@ class MapWaypointsDB : public DBInterface
 public:
     typedef struct MapWaypoints
     {
-        int64_t id;
+        friend class MapWaypointsDB;
         int64_t map_id;
         string identifier;
         double x;
@@ -28,6 +28,31 @@ public:
             bool is_quarternion;
             bool is_euler;
         } angle;
+
+        friend std::ostream& operator<<(std::ostream& os, const MapWaypoints& v)
+        {
+            os << "MapWaypoints = {ID: " << v.id << "\n\tMap ID: " << v.map_id
+               << "\n\tIdentifier: " << v.identifier << "\n\tPosition: (" << v.x
+               << ", " << v.y << ": " << v.angle.euler.yaw
+               << ")\n\tCreated At: " << asctime(&v.created_at)
+               << "\tUpdated At: " << asctime(&v.updated_at) << "}\n";
+            return os;
+        }
+
+        /**
+         * @brief O ID é único e definido pelo próprio banco de dados, esse
+         * método só pode ser utilizado quando o ID for conhecido através de
+         * algum get, como: getByMap ou getByMapIdentifier.
+         *
+         * @param _id
+         */
+        void setID(int64_t _id)
+        {
+            id = _id;
+        }
+
+    private:
+        int64_t id;
         tm created_at;
         tm updated_at;
     } MapWaypoints;
@@ -169,7 +194,7 @@ public:
             aux.angle.euler.yaw = get<double>(data.getValue("yaw"));
             aux.angle.is_euler = true;
             aux.created_at = get<tm>(data.getValue("created_at"));
-            aux.updated_at = get<tm>(data.getValue("update_at"));
+            aux.updated_at = get<tm>(data.getValue("updated_at"));
 
             out.push_back(aux);
         }
@@ -436,7 +461,7 @@ private:
         return pointsDB->getByPolygon(_polygon_id);
     }
 
-    vector<MapPolygon> getBy(const SQLConditionMap &_conditions)
+    vector<MapPolygon> getBy(const SQLConditionMap& _conditions)
     {
         vector<string> cols = sc.getColumnsNames();
 
@@ -452,7 +477,7 @@ private:
             aux.polygon_type = get<string>(data.getValue("polygon_type"));
             aux.identifier = get<string>(data.getValue("identifier"));
             aux.created_at = get<tm>(data.getValue("created_at"));
-            aux.updated_at = get<tm>(data.getValue("update_at"));
+            aux.updated_at = get<tm>(data.getValue("updated_at"));
             aux.points = getPoints(aux.id);
 
             out.push_back(aux);
@@ -466,11 +491,30 @@ class MapsDB : public DBInterface
 public:
     typedef struct MapData
     {
-        int64_t id;
+        friend class MapsDB;
         string pgm_path;
         string yaml_path;
         string stl_path;
         string obstacles_pgm_path;
+
+        friend std::ostream& operator<<(std::ostream& os, const MapData& v)
+        {
+            os << "MapData = {ID: " << v.id << "\n\tMap PGM: " << v.pgm_path
+               << "\n\tMap Yaml: " << v.yaml_path
+               << "\n\tMap STL: " << v.stl_path
+               << "\n\tObstacles PGM: " << v.obstacles_pgm_path
+               << "\n\tCreated At: " << asctime(&v.created_at)
+               << "\tUpdated At: " << asctime(&v.updated_at) << "}\n";
+            return os;
+        }
+
+        int64_t getId() const
+        {
+            return id;
+        }
+
+    private:
+        int64_t id;
         tm created_at;
         tm updated_at;
     } MapData;
@@ -512,11 +556,11 @@ public:
         return db->insert(&sc, &entry);
     }
 
-    bool update(const MapData& _data)
+    bool update(int64_t _id, const MapData& _data)
     {
         time_t now = time(0);
         SQLEntry entry;
-        entry.setValue("id", _data.id);
+        entry.setValue("id", _id);
         entry.setValue("pgm_path", _data.pgm_path);
         entry.setValue("yaml_path", _data.yaml_path);
         entry.setValue("stl_path", _data.stl_path);
@@ -525,7 +569,7 @@ public:
         entry.setValue("updated_at", *localtime(&now));
 
         SQLConditionMap conditions;
-        conditions["id"] = _data.id;
+        conditions["id"] = _id;
         return db->update(&sc, &entry, conditions);
     }
 
@@ -549,12 +593,34 @@ public:
         {
             out.id = get<int64_t>(results.at(0).getValue("id"));
             out.pgm_path = get<string>(results.at(0).getValue("pgm_path"));
-            out.yaml_path = get<string>(results.at(0).getValue("yaml_path "));
+            out.yaml_path = get<string>(results.at(0).getValue("yaml_path"));
             out.stl_path = get<string>(results.at(0).getValue("stl_path"));
             out.obstacles_pgm_path =
-                get<string>(results.at(0).getValue("obstacles_pgm_path "));
+                get<string>(results.at(0).getValue("obstacles_pgm_path"));
             out.created_at = get<tm>(results.at(0).getValue("created_at"));
-            out.updated_at = get<tm>(results.at(0).getValue("update_at"));
+            out.updated_at = get<tm>(results.at(0).getValue("updated_at"));
+        }
+        return out;
+    }
+
+    vector<MapData> getAll()
+    {
+        vector<SQLEntry> results = db->getAllEntries(&sc);
+        vector<MapData> out;
+        MapData aux;
+
+        for (SQLEntry const& entry : results)
+        {
+            aux.id = get<int64_t>(entry.getValue("id"));
+            aux.pgm_path = get<string>(entry.getValue("pgm_path"));
+            aux.yaml_path = get<string>(entry.getValue("yaml_path"));
+            aux.stl_path = get<string>(entry.getValue("stl_path"));
+            aux.obstacles_pgm_path =
+                get<string>(entry.getValue("obstacles_pgm_path"));
+            aux.created_at = get<tm>(entry.getValue("created_at"));
+            aux.updated_at = get<tm>(entry.getValue("updated_at"));
+
+            out.push_back(aux);
         }
         return out;
     }

@@ -42,7 +42,7 @@ enum class SQLDataType
     Boolean,     // short
     Real,        // float
     Double,      // double
-    Time,        // std::tm
+    Time,        // std::string
     TimestampTZ, // std::tm
     Text,        // std::string
 };
@@ -146,6 +146,12 @@ public:
     bool hasColumn(const std::string& columnName) const
     {
         return data.find(columnName) != data.end();
+    }
+
+    bool toBool(const std::string& columnName)
+    {
+        return std::get<std::string>(this->getValue(columnName)).find("t") !=
+               std::string::npos;
     }
 
 private:
@@ -478,16 +484,16 @@ public:
                     case SQLDataType::Int:
                         data.setValue(colName, res.get<int>(colName));
                         break;
-                    case SQLDataType::Time:
                     case SQLDataType::TimestampTZ:
                     case SQLDataType::DateTime:
                         data.setValue(colName, res.get<std::tm>(colName));
                         break;
+                    case SQLDataType::Boolean:
+                    case SQLDataType::Time:
                     case SQLDataType::String:
                     case SQLDataType::Text:
                         data.setValue(colName, res.get<std::string>(colName));
                         break;
-                    case SQLDataType::Boolean:
                     case SQLDataType::Short:
                         data.setValue(colName, res.get<short>(colName));
                         break;
@@ -518,7 +524,13 @@ public:
                 catch (const cppdb::bad_value_cast& e)
                 {
                     std::cerr << "Column conversion error for " << colName
-                              << ": " << e.what() << "\n";
+                              << ": " << e.what()
+                              << "\nValue: " << res.get<std::string>(colName);
+                    // for (uint8_t u : res.get<std::ostream>>(colName))
+                    // {
+                    //     std::cerr << u << ", ";
+                    // }
+                    std::cerr << "\n";
                 }
             }
             entries.push_back(data);

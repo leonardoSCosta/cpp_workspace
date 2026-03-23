@@ -12,12 +12,36 @@ public:
     {
         int64_t id;
         string weekday;
-        tm start_time;
-        tm end_time;
+        string start_time; // hh:mm:ss
+        string end_time;   // hh:mm:ss
         tm created_at;
         tm updated_at;
 
+        friend std::ostream& operator<<(std::ostream& os, const WorkInterval& v)
+        {
+            os << "WorkInterval = {ID: " << v.id << ", Weekday: " << v.weekday
+               << ", StartTime: " << v.start_time << ", EndTime: " << v.end_time
+               << ", Created At: " << asctime(&v.created_at)
+               << "\tUpdated At: " << asctime(&v.updated_at) << "}\n";
+            return os;
+        }
     } WorkInterval;
+
+    typedef enum WorkWeekday
+    {
+        MONDAY,
+        TUESDAY,
+        WEDNESDAY,
+        THURSDAY,
+        FRIDAY,
+        SATURDAY,
+        SUNDAY,
+        N_DAYS
+    } WorkWeekday;
+
+    static constexpr const char* WeekdayNames[N_DAYS] = {
+        "monday", "tuesday",  "wednesday", "thursday",
+        "friday", "saturday", "sunday"};
 
     RobotWorkIntervalsDB(SQLManager* _manager, const string& _table,
                          const string& _primaryKey)
@@ -37,11 +61,11 @@ public:
     {
     }
 
-    bool add(const string& _weekday, const tm& _start, const tm& _end)
+    bool add(WorkWeekday _weekday, const string& _start, const string& _end)
     {
         time_t now = time(0);
         SQLEntry entry;
-        entry.setValue("weekday", _weekday);
+        entry.setValue("weekday", WeekdayNames[_weekday]);
         entry.setValue("start_time", _start);
         entry.setValue("end_time", _end);
 
@@ -51,26 +75,26 @@ public:
         return db->insert(&sc, &entry);
     }
 
-    bool clear(const string& _weekday)
+    bool clear(WorkWeekday _weekday)
     {
         SQLConditionMap conditions;
-        conditions["weekday"] = _weekday;
+        conditions["weekday"] = string(WeekdayNames[_weekday]);
         return db->remove(&sc, conditions);
     }
 
-    std::vector<WorkInterval> getIntervals(const string& _weekday)
+    std::vector<WorkInterval> getIntervals(WorkWeekday _weekday)
     {
         vector<string> cols = sc.getColumnsNames();
         SQLConditionMap conditions;
-        conditions["weekday"] = _weekday;
+        conditions["weekday"] = string(WeekdayNames[_weekday]);
         std::vector<WorkInterval> intervals;
 
         for (SQLEntry const& data : db->get(&sc, cols, conditions))
         {
             intervals.push_back({get<int64_t>(data.getValue("id")),
                                  get<string>(data.getValue("weekday")),
-                                 get<tm>(data.getValue("start_time")),
-                                 get<tm>(data.getValue("end_time")),
+                                 get<string>(data.getValue("start_time")),
+                                 get<string>(data.getValue("end_time")),
                                  get<tm>(data.getValue("created_at")),
                                  get<tm>(data.getValue("updated_at"))});
         }
@@ -91,6 +115,17 @@ public:
         bool automatic_time_sync_enabled;
         tm created_at;
         tm updated_at;
+
+        friend std::ostream& operator<<(std::ostream& os, const TimeSettings& v)
+        {
+            os << "TimeSettings = {ID: " << v.id
+               << ", Datetime: " << asctime(&v.configured_datetime)
+               << ", Use UTC: " << v.configured_datetime_use_utc
+               << ", Time Sync: " << v.automatic_time_sync_enabled
+               << ", Created At: " << asctime(&v.created_at)
+               << "\tUpdated At: " << asctime(&v.updated_at) << "}\n";
+            return os;
+        }
     } TimeSettings;
 
     RobotTimeDB(SQLManager* _manager, const string& _table,
@@ -99,6 +134,8 @@ public:
     {
         // TODO: Confirmar se não seria melhor deixar como SERIAL, para o DB
         // determinar o id correto
+        // ...
+        // Por enquanto, ID é sempre 1, porque é do próprio robô
 
         // insert, update, primary
         sc.addColumn("id", SQLDataType::SmallInt, false, false, true);
@@ -161,10 +198,12 @@ public:
             out.id = get<int16_t>(results.at(0).getValue("id"));
             out.configured_datetime =
                 get<tm>(results.at(0).getValue("configured_datetime"));
-            out.configured_datetime_use_utc = get<short>(
-                results.at(0).getValue("configured_datetime_use_utc"));
-            out.automatic_time_sync_enabled = get<short>(
-                results.at(0).getValue("automatic_time_sync_enabled"));
+
+            out.configured_datetime_use_utc =
+                results.at(0).toBool("configured_datetime_use_utc");
+            out.automatic_time_sync_enabled =
+                results.at(0).toBool("automatic_time_sync_enabled");
+
             out.created_at = get<tm>(results.at(0).getValue("created_at"));
             out.updated_at = get<tm>(results.at(0).getValue("updated_at"));
         }
@@ -184,11 +223,15 @@ public:
             aux.configured_datetime =
                 get<tm>(results.at(0).getValue("configured_datetime"));
 
-            aux.configured_datetime_use_utc = get<short>(
-                results.at(0).getValue("configured_datetime_use_utc"));
+            aux.configured_datetime_use_utc =
+                get<string>(
+                    results.at(0).getValue("configured_datetime_use_utc"))
+                    .find("t") != string::npos;
 
-            aux.automatic_time_sync_enabled = get<short>(
-                results.at(0).getValue("automatic_time_sync_enabled"));
+            aux.automatic_time_sync_enabled =
+                get<string>(
+                    results.at(0).getValue("automatic_time_sync_enabled"))
+                    .find("t") != string::npos;
 
             aux.created_at = get<tm>(results.at(0).getValue("created_at"));
             aux.updated_at = get<tm>(results.at(0).getValue("updated_at"));
@@ -200,4 +243,4 @@ public:
 private:
 };
 
-#endif  // INCLUDE_INCLUDE_TIMESCHEDULEDB_HPP_
+#endif // INCLUDE_INCLUDE_TIMESCHEDULEDB_HPP_

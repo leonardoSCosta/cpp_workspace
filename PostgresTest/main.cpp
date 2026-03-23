@@ -22,13 +22,111 @@ int main(int argc, char* argv[])
     MapPolygonsDB polygonsDB(&dbManager, "map_polygons", "id", &polyPointsDB);
     MapsDB mapsDB(&dbManager, "maps", "id", &waypointsDB, &polygonsDB);
 
+    // ------------------------------------------------------------------------
+    // WIFI TEST
+    // wifiDB.removeConfig("SOCIADLROIDS2", "Slinky2027");
     // wifiDB.saveConfig("SOCIADLROIDS2", "Slinky2027");
-    wifiDB.removeConfig("SOCIADLROIDS2", "Slinky2027");
-    for (const auto& config : wifiDB.getWiFiEntries())
+    // for (const auto& config : wifiDB.getWiFiEntries())
+    // {
+    //     std::cout << config;
+    // }
+
+    // ------------------------------------------------------------------------
+    // WORK INTERVAL TEST
+    // workIntervalDB.add(RobotWorkIntervalsDB::TUESDAY, "06:00:00",
+    // "23:00:00"); workIntervalDB.clear(RobotWorkIntervalsDB::TUESDAY); for
+    // (auto &n : workIntervalDB.getIntervals(RobotWorkIntervalsDB::TUESDAY))
+    // {
+    //      std::cout << n;
+    // }
+
+    // ------------------------------------------------------------------------
+    // TIME TEST
+    // RobotTimeDB::TimeSettings settings, ret;
+    // settings.id = 1;
+    //
+    // std::time_t now = std::time(0);
+    // settings.configured_datetime = *std::localtime(&now);
+    // settings.configured_datetime_use_utc = false;
+    // settings.automatic_time_sync_enabled = false;
+    //
+    // timeDB.remove(1);
+    // timeDB.save(settings);
+    // ret = timeDB.getSettings(1);
+    // if (ret.id != -1)
+    //     std::cout << ret;
+    //
+    // for (auto &n : timeDB.getSettings())
+    // {
+    //      std::cout << n;
+    // }
+
+    // ------------------------------------------------------------------------
+    // HOTSPOT TEST
+    // hotspotDB.save(1, "RobotHS-2", "SD2026");
+    // // hotspotDB.remove(1);
+    // HotspotSettingsDB::HotspotSettings ret = hotspotDB.getSettings(1);
+    // if (ret.id != -1)
+    //     std::cout << ret;
+    //
+    // for (auto &n : hotspotDB.getHotspotEntries())
+    // {
+    //      std::cout << n;
+    // }
+
+    // ------------------------------------------------------------------------
+    // Maps TEST
+    MapsDB::MapData mData;
+    // mData.pgm_path = "/home/socialdroids/map.pgm";
+    // mData.yaml_path = "/home/socialdroids/map.yaml";
+    // mData.stl_path = "/home/socialdroids/map_3d.stl";
+    // mData.obstacles_pgm_path = "/home/socialdroids/obstacles.pgm";
+    //
+    // mapsDB.save(mData);
+    // mapsDB.update(1, mData);
+    // mData = mapsDB.getMap(17);
+    // std::cout << mData;
+    for (auto const& n : mapsDB.getAll())
     {
-        std::cout << "Entry - SSID = " << config.ssid
-                  << " | PWD = " << config.password << "\n";
+        std::cout << n;
     }
+    // mapsDB.remove(16);
+
+    // ------------------------------------------------------------------------
+    // Waypoints TEST
+    // MapWaypointsDB::MapWaypoints wp;
+    // wp.map_id = 16;
+    // wp.identifier = "copa";
+    // wp.x = 1.;
+    // wp.y = 0.23;
+    // waypointsDB.add(wp);
+    //
+    // wp.identifier = "base";
+    // wp.x = 0.;
+    // wp.y = 0.5;
+    // waypointsDB.add(wp);
+    //
+    // wp.map_id = 15;
+    // wp.identifier = "copa";
+    // wp.x = 1.;
+    // wp.y = 0.23;
+    // waypointsDB.add(wp);
+    // wp.identifier = "copa";
+    // wp.x = 1.;
+    // wp.y = 1.5;
+    // wp.angle.euler.yaw = 0.5;
+    // wp.angle.is_euler = true;
+    // // waypointsDB.add(wp);
+    //
+    // wp.map_id = 15;
+    // wp.setID(3);
+    // // waypointsDB.add(wp);
+    //
+    // waypointsDB.removeAll(15);
+    //
+    // for (auto &n : waypointsDB.getByMap(15)) {
+    //     std::cout << n;
+    // }
 
     return 0;
 }
