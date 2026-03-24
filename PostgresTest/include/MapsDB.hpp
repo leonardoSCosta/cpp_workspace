@@ -2,7 +2,7 @@
 #define INCLUDE_INCLUDE_MAPSDB_HPP_
 
 #include "DBAbstractionLayer.hpp"
-#include <algorithm> // any_of
+#include <algorithm> // all_of
 using namespace std;
 
 class MapWaypointsDB : public DBInterface
@@ -44,11 +44,20 @@ public:
          * método só pode ser utilizado quando o ID for conhecido através de
          * algum get, como: getByMap ou getByMapIdentifier.
          *
+         * Ao adicionar uma entrada, o atributo `id` também é preenchido por
+         * referência com o valor atribuído pelo banco de dados, permitindo que
+         * o usuário saiba o ID para atribuir pontos.
+         *
          * @param _id
          */
         void setID(int64_t _id)
         {
             id = _id;
+        }
+
+        int64_t getID() const
+        {
+            return id;
         }
 
     private:
@@ -57,9 +66,8 @@ public:
         tm updated_at;
     } MapWaypoints;
 
-    MapWaypointsDB(SQLManager* _manager, const string& _table,
-                   const string& _primaryKey)
-        : DBInterface(_manager, _table, _primaryKey)
+    MapWaypointsDB(SQLManager* _manager, const string& _table)
+        : DBInterface(_manager, _table)
     {
         // insert, update, primary
         sc.addColumn("id", SQLDataType::BigInt, false, false, true); // SERIAL
@@ -78,7 +86,7 @@ public:
     {
     }
 
-    bool add(MapWaypoints const& _waypoint)
+    bool add(MapWaypoints& _waypoint)
     {
         time_t now = time(0);
         SQLEntry entry;
@@ -97,7 +105,18 @@ public:
 
         entry.setValue("created_at", *localtime(&now));
         entry.setValue("updated_at", *localtime(&now));
-        return db->insert(&sc, &entry);
+        if (db->insert(&sc, &entry))
+        {
+            _waypoint.setID(
+                db->lastStatement().sequence_last("map_waypoints_id_seq"));
+            return true;
+        }
+        else
+        {
+            _waypoint.setID(-1);
+        }
+
+        return false;
     }
 
     bool update(MapWaypoints const& _waypoint)
@@ -149,12 +168,12 @@ public:
         return db->remove(&sc, conditions);
     }
 
-    vector<bool> saveWaypoints(vector<MapWaypoints> const& _waypoints)
+    vector<bool> saveWaypoints(vector<MapWaypoints>& _waypoints)
     {
         vector<bool> out;
         out.reserve(_waypoints.size());
 
-        for (MapWaypoints const& point : _waypoints)
+        for (MapWaypoints& point : _waypoints)
         {
             if (add(point) == false)
             {
@@ -216,19 +235,28 @@ class MapPolygonPointsDB : public DBInterface
 public:
     typedef struct PolygonPoint
     {
+        int64_t map_id;
         int64_t polygon_id;
         int32_t point_index;
         double x;
         double y;
+
+        friend std::ostream& operator<<(std::ostream& os, const PolygonPoint& v)
+        {
+            os << "{x: " << v.x << ", y: " << v.y
+               << ", PolyID: " << v.polygon_id << ", MapID: " << v.map_id
+               << ", Index: " << v.point_index << "}";
+            return os;
+        }
     } PolygonPoint;
 
-    MapPolygonPointsDB(SQLManager* _manager, const string& _table,
-                       const string& _primaryKey)
-        : DBInterface(_manager, _table, _primaryKey)
+    MapPolygonPointsDB(SQLManager* _manager, const string& _table)
+        : DBInterface(_manager, _table)
     {
         // insert, update, primary
-        sc.addColumn("polygon_id", SQLDataType::BigInt, true, false, true);
-        sc.addColumn("point_index", SQLDataType::Integer, true, false, true);
+        sc.addColumn("map_id", SQLDataType::BigInt, true, true, true);
+        sc.addColumn("polygon_id", SQLDataType::BigInt, true, true, true);
+        sc.addColumn("point_index", SQLDataType::Integer, true, true, true);
         sc.addColumn("x", SQLDataType::Double, true, true, false);
         sc.addColumn("y", SQLDataType::Double, true, true, false);
     }
@@ -241,6 +269,7 @@ private:
     bool add(PolygonPoint const& _point)
     {
         SQLEntry entry;
+        entry.setValue("map_id", _point.map_id);
         entry.setValue("polygon_id", _point.polygon_id);
         entry.setValue("point_index", _point.point_index);
         entry.setValue("x", _point.x);
@@ -252,12 +281,14 @@ private:
     bool update(PolygonPoint const& _point)
     {
         SQLEntry entry;
+        entry.setValue("map_id", _point.map_id);
         entry.setValue("polygon_id", _point.polygon_id);
         entry.setValue("point_index", _point.point_index);
         entry.setValue("x", _point.x);
         entry.setValue("y", _point.y);
 
         SQLConditionMap conditions;
+        conditions["map_id"] = _point.map_id;
         conditions["polygon_id"] = _point.polygon_id;
         conditions["point_index"] = _point.point_index;
         return db->update(&sc, &entry, conditions);
@@ -266,19 +297,20 @@ private:
     bool remove(int64_t _polygon_id, int32_t _point_index)
     {
         SQLConditionMap conditions;
+        conditions["map_id"] = _polygon_id;
         conditions["polygon_id"] = _polygon_id;
         conditions["point_index"] = _point_index;
         return db->remove(&sc, conditions);
     }
 
-    vector<bool> savePoints(vector<PolygonPoint> const& _points)
+    vector<bool> addPoints(vector<PolygonPoint> const& _points)
     {
         vector<bool> out;
         out.reserve(_points.size());
 
         for (PolygonPoint const& point : _points)
         {
-            if (add(point) == false)
+            if (not add(point))
             {
                 out.push_back(update(point));
             }
@@ -286,6 +318,18 @@ private:
             {
                 out.push_back(true);
             }
+        }
+        return out;
+    }
+
+    vector<bool> updatePoints(vector<PolygonPoint> const& _points)
+    {
+        vector<bool> out;
+        out.reserve(_points.size());
+
+        for (PolygonPoint const& point : _points)
+        {
+            out.push_back(update(point));
         }
         return out;
     }
@@ -303,6 +347,7 @@ private:
 
         for (SQLEntry const& data : results)
         {
+            aux.map_id = get<int64_t>(data.getValue("map_id"));
             aux.polygon_id = get<int64_t>(data.getValue("polygon_id"));
             aux.point_index = get<int32_t>(data.getValue("point_index"));
             aux.x = get<double>(data.getValue("x"));
@@ -317,20 +362,103 @@ private:
 class MapPolygonsDB : public DBInterface
 {
 public:
+    typedef enum PolygonAllowedTypes
+    {
+        ROOM = 0,
+        SPEED,
+        RESTRICTED,
+        BORDER,
+        N_TYPES
+    } PolygonAllowedTypes;
+
+    static constexpr const char* PolygonTypenames[N_TYPES] = {
+        "room", "speed", "restricted", "border"};
+
     typedef struct MapPolygon
     {
-        int64_t id;
+        friend class MapPolygonsDB;
         int64_t map_id;
-        string polygon_type;
         string identifier;
+        vector<MapPolygonPointsDB::PolygonPoint> points;
+
+        friend std::ostream& operator<<(std::ostream& os, const MapPolygon& v)
+        {
+            os << "MapPolygon = {ID: " << v.id << "\n\tMap ID: " << v.map_id
+               << "\n\tType: " << v.polygon_type
+               << "\n\tIdentifier: " << v.identifier << "\n\tPoints: [";
+
+            for (MapPolygonPointsDB::PolygonPoint const& pt : v.points)
+            {
+                os << pt << "\n\t\t";
+            }
+
+            os << "]\n\tCreated At: " << asctime(&v.created_at)
+               << "\tUpdated At: " << asctime(&v.updated_at) << "}\n";
+            return os;
+        }
+
+        /**
+         * @brief O ID é único e definido pelo próprio banco de dados, esse
+         * método só pode ser utilizado quando o ID for conhecido.
+         *
+         * Ao adicionar uma entrada, o atributo `id` também é preenchido por
+         * referência com o valor atribuído pelo banco de dados, permitindo que
+         * o usuário saiba o ID para atribuir pontos.
+         *
+         * @param _id
+         */
+        void setID(int64_t _id)
+        {
+            id = _id;
+
+            for (MapPolygonPointsDB::PolygonPoint& pt : this->points)
+            {
+                pt.polygon_id = this->id;
+            }
+        }
+
+        int64_t getID() const
+        {
+            return id;
+        }
+
+        void setType(MapPolygonsDB::PolygonAllowedTypes _type)
+        {
+            polygon_type = MapPolygonsDB::PolygonTypenames[_type];
+        }
+
+        string type() const
+        {
+            return polygon_type;
+        }
+
+        void createPoint(double _x, double _y)
+        {
+            MapPolygonPointsDB::PolygonPoint point;
+            point.map_id = this->map_id;
+            point.polygon_id = this->id;
+            point.point_index = points.size();
+            point.x = _x;
+            point.y = _y;
+
+            points.push_back(point);
+        }
+
+        void resetPoints()
+        {
+            points.clear();
+        }
+
+    private:
+        int64_t id = -1;
+        string polygon_type;
         tm created_at;
         tm updated_at;
-        vector<MapPolygonPointsDB::PolygonPoint> points;
     } MapPolygon;
 
     MapPolygonsDB(SQLManager* _manager, const string& _table,
-                  const string& _primaryKey, MapPolygonPointsDB* _pointsDBref)
-        : DBInterface(_manager, _table, _primaryKey), pointsDB(_pointsDBref)
+                  MapPolygonPointsDB* _pointsDBref)
+        : DBInterface(_manager, _table), pointsDB(_pointsDBref)
     {
         // insert, update, primary
         sc.addColumn("id", SQLDataType::BigInt, false, false, true); // SERIAL
@@ -346,23 +474,45 @@ public:
     {
     }
 
-    bool add(MapPolygon const& _polygon)
+    bool add(MapPolygon& _polygon)
     {
         time_t now = time(0);
         SQLEntry entry;
         entry.setValue("map_id", _polygon.map_id);
         entry.setValue("polygon_type", _polygon.polygon_type);
-        entry.setValue("identifier", _polygon.identifier);
+        if (_polygon.polygon_type == PolygonTypenames[BORDER])
+        {
+            sc.updateColumn("identifier", false, false);
+        }
+        else
+        {
+            entry.setValue("identifier", _polygon.identifier);
+        }
 
         entry.setValue("created_at", *localtime(&now));
         entry.setValue("updated_at", *localtime(&now));
+
+        bool ret = true;
         if (db->insert(&sc, &entry))
         {
-            vector<bool> savedPoints = pointsDB->savePoints(_polygon.points);
-            return any_of(savedPoints.begin(), savedPoints.end(),
-                          [](bool val) { return val == false; });
+            _polygon.setID(
+                db->lastStatement().sequence_last("map_polygons_id_seq"));
+
+            if (not _polygon.points.empty())
+            {
+                vector<bool> pointsOk = pointsDB->addPoints(_polygon.points);
+                ret = all_of(pointsOk.begin(), pointsOk.end(),
+                             [](bool val) { return val == true; });
+            }
         }
-        return false;
+        else
+        {
+            _polygon.setID(-1);
+            ret = false;
+        }
+        sc.updateColumn("identifier", true, true);
+
+        return ret;
     }
 
     /**
@@ -380,7 +530,15 @@ public:
         SQLEntry entry;
         entry.setValue("map_id", _polygon.map_id);
         entry.setValue("polygon_type", _polygon.polygon_type);
-        entry.setValue("identifier", _polygon.identifier);
+
+        if (_polygon.polygon_type == PolygonTypenames[BORDER])
+        {
+            sc.updateColumn("identifier", false, false);
+        }
+        else
+        {
+            entry.setValue("identifier", _polygon.identifier);
+        }
 
         entry.setValue("updated_at", *localtime(&now));
 
@@ -388,13 +546,23 @@ public:
         conditions["id"] = _polygon.id;
         conditions["map_id"] = _polygon.map_id;
 
+        bool ret = true;
         if (db->update(&sc, &entry, conditions))
         {
-            vector<bool> savedPoints = pointsDB->savePoints(_polygon.points);
-            return any_of(savedPoints.begin(), savedPoints.end(),
-                          [](bool val) { return val == false; });
+            if (not _polygon.points.empty())
+            {
+                vector<bool> pointsOk = pointsDB->addPoints(_polygon.points);
+                ret = all_of(pointsOk.begin(), pointsOk.end(),
+                             [](bool val) { return val == true; });
+            }
         }
-        return false;
+        else
+        {
+            ret = false;
+        }
+        sc.updateColumn("identifier", true, true);
+
+        return ret;
     }
 
     bool remove(int64_t _id)
@@ -475,7 +643,16 @@ private:
             aux.id = get<int64_t>(data.getValue("id"));
             aux.map_id = get<int64_t>(data.getValue("map_id"));
             aux.polygon_type = get<string>(data.getValue("polygon_type"));
-            aux.identifier = get<string>(data.getValue("identifier"));
+            try
+            {
+                aux.identifier = get<string>(data.getValue("identifier"));
+            }
+            catch (invalid_argument& e)
+            {
+                // identifier column can be null
+                aux.identifier = "";
+            }
+
             aux.created_at = get<tm>(data.getValue("created_at"));
             aux.updated_at = get<tm>(data.getValue("updated_at"));
             aux.points = getPoints(aux.id);
@@ -520,9 +697,8 @@ public:
     } MapData;
 
     MapsDB(SQLManager* _manager, const string& _table,
-           const string& _primaryKey, MapWaypointsDB* _waypointsDBref,
-           MapPolygonsDB* _polygonsDBref)
-        : DBInterface(_manager, _table, _primaryKey),
+           MapWaypointsDB* _waypointsDBref, MapPolygonsDB* _polygonsDBref)
+        : DBInterface(_manager, _table),
           waypointsDB(_waypointsDBref), polygonsDB(_polygonsDBref)
 
     {
@@ -533,6 +709,17 @@ public:
         sc.addColumn("stl_path", SQLDataType::Text, true, true, true);
         sc.addColumn("obstacles_pgm_path", SQLDataType::Text, true, true, true);
 
+        sc.addColumn("resolution", SQLDataType::Double, false, false, false);
+        sc.addColumn("width", SQLDataType::Integer, false, false, false);
+        sc.addColumn("height", SQLDataType::Integer, false, false, false);
+        sc.addColumn("negate", SQLDataType::Boolean, false, false, false);
+        sc.addColumn("occupied_thresh", SQLDataType::Double, false, false,
+                     false);
+        sc.addColumn("free_thresh", SQLDataType::Double, false, false, false);
+        sc.addColumn("origin_x", SQLDataType::Double, false, false, false);
+        sc.addColumn("origin_y", SQLDataType::Double, false, false, false);
+        sc.addColumn("origin_yaw", SQLDataType::Double, false, false, false);
+
         sc.addColumn("created_at", SQLDataType::DateTime, true, false, false);
         sc.addColumn("updated_at", SQLDataType::DateTime, true, true, false);
     }
@@ -541,7 +728,7 @@ public:
     {
     }
 
-    bool save(const MapData& _data)
+    bool save(const MapData& _data, int64_t& _newMapID)
     {
         time_t now = time(0);
         SQLEntry entry;
@@ -553,7 +740,12 @@ public:
         entry.setValue("created_at", *localtime(&now));
         entry.setValue("updated_at", *localtime(&now));
 
-        return db->insert(&sc, &entry);
+        bool ok = db->insert(&sc, &entry);
+        if (ok)
+        {
+            _newMapID = db->lastStatement().sequence_last("maps_id_seq");
+        }
+        return ok;
     }
 
     bool update(int64_t _id, const MapData& _data)

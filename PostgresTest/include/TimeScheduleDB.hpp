@@ -29,7 +29,7 @@ public:
 
     typedef enum WorkWeekday
     {
-        MONDAY,
+        MONDAY = 0,
         TUESDAY,
         WEDNESDAY,
         THURSDAY,
@@ -43,9 +43,8 @@ public:
         "monday", "tuesday",  "wednesday", "thursday",
         "friday", "saturday", "sunday"};
 
-    RobotWorkIntervalsDB(SQLManager* _manager, const string& _table,
-                         const string& _primaryKey)
-        : DBInterface(_manager, _table, _primaryKey)
+    RobotWorkIntervalsDB(SQLManager* _manager, const string& _table)
+        : DBInterface(_manager, _table)
     {
         // insert, update, primary
         sc.addColumn("id", SQLDataType::BigInt, false, false, true);
@@ -128,9 +127,8 @@ public:
         }
     } TimeSettings;
 
-    RobotTimeDB(SQLManager* _manager, const string& _table,
-                const string& _primaryKey)
-        : DBInterface(_manager, _table, _primaryKey)
+    RobotTimeDB(SQLManager* _manager, const string& _table)
+        : DBInterface(_manager, _table)
     {
         // TODO: Confirmar se não seria melhor deixar como SERIAL, para o DB
         // determinar o id correto

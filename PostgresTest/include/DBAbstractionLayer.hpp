@@ -68,8 +68,7 @@ std::ostream& operator<<(std::ostream& os, const SQLData& v)
 class SQLSchema
 {
 public:
-    SQLSchema(const std::string _table, const std::string _uniqueKey)
-        : tableName(_table), uniqueKeyName(_uniqueKey)
+    SQLSchema(const std::string _table) : tableName(_table)
     {
     }
 
@@ -97,11 +96,6 @@ public:
         columns.push_back({_name, _insert, _update, _isPrimary, _type});
     }
 
-    const std::string& uniqueKey() const
-    {
-        return uniqueKeyName;
-    };
-
     const std::vector<Column_t>& getColumns() const
     {
         return columns;
@@ -118,10 +112,20 @@ public:
         return out;
     }
 
+    void updateColumn(std::string const& _col, bool _insert, bool _update)
+    {
+        for (Column_t& col : columns)
+        {
+            if (col.name == _col)
+            {
+                col.insert = _insert;
+                col.update = _update;
+            }
+        }
+    }
+
 private:
     std::string tableName;
-    std::string uniqueKeyName;
-
     std::vector<Column_t> columns;
 };
 
@@ -232,10 +236,9 @@ public:
         }
 
         int affected = run();
-        if (affected == 0)
+        if (affected <= 0)
         {
-            std::cerr << "Update skipped: Entry not found or conditions didn't "
-                         "match.\n";
+            std::cerr << "Insert failed!\n";
             return false;
         }
 
@@ -401,6 +404,11 @@ public:
         return get(_schema, {}, {});
     }
 
+    cppdb::statement& lastStatement()
+    {
+        return stat;
+    }
+
     /**
      * @brief Realiza uma query customizável
      *
@@ -477,6 +485,12 @@ public:
                     continue;
                 }
 
+                if (res.is_null(colName))
+                {
+                    std::cerr << "Column: " << colName << " is Null\n";
+                    continue;
+                }
+
                 try
                 {
                     switch (it->second)
@@ -547,6 +561,10 @@ private:
     void prepare(std::string const& _statement)
     {
         // std::cout << "\t-- Preparing <" << _statement << ">\n";
+        if (!stat.empty())
+        {
+            stat.reset();
+        }
         stat = currentSession->create_statement(_statement);
     }
 
@@ -607,15 +625,12 @@ private:
         try
         {
             stat.exec();
-            // std::cout << "ID: " << stat.last_insert_id() << "\n";
             int affectedRows = stat.affected();
-            stat.reset();
             return affectedRows;
         }
         catch (cppdb::cppdb_error const& e)
         {
             std::cerr << "Statement Run ERROR: " << e.what() << std::endl;
-            stat.reset();
             return -1;
         }
     }

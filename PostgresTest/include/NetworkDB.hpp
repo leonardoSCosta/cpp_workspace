@@ -24,9 +24,8 @@ public:
         }
     } WiFiConfig;
 
-    WiFiDB(SQLManager* _manager, const string& _table,
-           const string& _primaryKey)
-        : DBInterface(_manager, _table, _primaryKey)
+    WiFiDB(SQLManager* _manager, const string& _table)
+        : DBInterface(_manager, _table)
     {
         // insert, update, primary
         sc.addColumn("ssid", SQLDataType::String, true, true, true);
@@ -127,9 +126,8 @@ public:
         }
     } HotspotSettings;
 
-    HotspotSettingsDB(SQLManager* _manager, const string& _table,
-                      const string& _primaryKey)
-        : DBInterface(_manager, _table, _primaryKey)
+    HotspotSettingsDB(SQLManager* _manager, const string& _table)
+        : DBInterface(_manager, _table)
     {
         // insert, update, primary
         sc.addColumn("id", SQLDataType::SmallInt, true, true, true);

@@ -8,19 +8,18 @@ int main(int argc, char* argv[])
     SQLManager dbManager;
     bool ok = dbManager.init("setup_management", "postgres", "postgres");
 
-    WiFiDB wifiDB(&dbManager, "wifi_profiles", "ssid");
-    HotspotSettingsDB hotspotDB(&dbManager, "hotspot_settings", "id");
+    WiFiDB wifiDB(&dbManager, "wifi_profiles");
+    HotspotSettingsDB hotspotDB(&dbManager, "hotspot_settings");
 
     RobotWorkIntervalsDB workIntervalDB(
-        &dbManager, "robot_working_allowed_intervals", "id");
-    RobotTimeDB timeDB(&dbManager, "robot_time_settings", "id");
+        &dbManager, "robot_working_allowed_intervals");
+    RobotTimeDB timeDB(&dbManager, "robot_time_settings");
 
-    MapWaypointsDB waypointsDB(&dbManager, "map_waypoints", "id");
+    MapWaypointsDB waypointsDB(&dbManager, "map_waypoints");
 
-    MapPolygonPointsDB polyPointsDB(&dbManager, "map_polygon_points",
-                                    "polygon_id");
-    MapPolygonsDB polygonsDB(&dbManager, "map_polygons", "id", &polyPointsDB);
-    MapsDB mapsDB(&dbManager, "maps", "id", &waypointsDB, &polygonsDB);
+    MapPolygonPointsDB polyPointsDB(&dbManager, "map_polygon_points");
+    MapPolygonsDB polygonsDB(&dbManager, "map_polygons", &polyPointsDB);
+    MapsDB mapsDB(&dbManager, "maps", &waypointsDB, &polygonsDB);
 
     // ------------------------------------------------------------------------
     // WIFI TEST
@@ -33,12 +32,15 @@ int main(int argc, char* argv[])
 
     // ------------------------------------------------------------------------
     // WORK INTERVAL TEST
+    //
     // workIntervalDB.add(RobotWorkIntervalsDB::TUESDAY, "06:00:00",
-    // "23:00:00"); workIntervalDB.clear(RobotWorkIntervalsDB::TUESDAY); for
-    // (auto &n : workIntervalDB.getIntervals(RobotWorkIntervalsDB::TUESDAY))
+    //                    "23:00:00");
+    // for (auto &n :
+    //      workIntervalDB.getIntervals(RobotWorkIntervalsDB::TUESDAY))
     // {
     //      std::cout << n;
     // }
+    // workIntervalDB.clear(RobotWorkIntervalsDB::TUESDAY);
 
     // ------------------------------------------------------------------------
     // TIME TEST
@@ -76,30 +78,41 @@ int main(int argc, char* argv[])
 
     // ------------------------------------------------------------------------
     // Maps TEST
-    MapsDB::MapData mData;
+    // MapsDB::MapData mData;
     // mData.pgm_path = "/home/socialdroids/map.pgm";
     // mData.yaml_path = "/home/socialdroids/map.yaml";
     // mData.stl_path = "/home/socialdroids/map_3d.stl";
     // mData.obstacles_pgm_path = "/home/socialdroids/obstacles.pgm";
     //
-    // mapsDB.save(mData);
-    // mapsDB.update(1, mData);
-    // mData = mapsDB.getMap(17);
-    // std::cout << mData;
-    for (auto const& n : mapsDB.getAll())
-    {
-        std::cout << n;
-    }
-    // mapsDB.remove(16);
+    // // mapsDB.remove(1);
+    // // mapsDB.remove(2);
+    // // mapsDB.remove(3);
+    // // mapsDB.remove(4);
+    // // mapsDB.remove(5);
+    // int64_t mapID = 1;
+    // // mapsDB.save(mData, mapID);
+    // // mapsDB.update(1, mData);
+    // // mData = mapsDB.getMap(17);
+    // // std::cout << mData;
+    // for (auto const& n : mapsDB.getAll())
+    // {
+    //     std::cout << n;
+    // }
 
     // ------------------------------------------------------------------------
     // Waypoints TEST
     // MapWaypointsDB::MapWaypoints wp;
-    // wp.map_id = 16;
-    // wp.identifier = "copa";
-    // wp.x = 1.;
-    // wp.y = 0.23;
-    // waypointsDB.add(wp);
+    // wp.setID(10);
+    // wp.map_id = mapID;
+    // wp.identifier = "João José 2";
+    // wp.x = 1.5;
+    // wp.y = 0.73;
+    // wp.angle.euler.yaw = 0.75;
+    // if(waypointsDB.update(wp))
+    //     std::cout << "Waypoint added! ID = " << wp.getID() << "\n";
+    // else
+    //     std::cout << "Waypoint add failed! ID = " << wp.getID() << "\n";
+    //
     //
     // wp.identifier = "base";
     // wp.x = 0.;
@@ -124,7 +137,48 @@ int main(int argc, char* argv[])
     //
     // waypointsDB.removeAll(15);
     //
-    // for (auto &n : waypointsDB.getByMap(15)) {
+    // for (auto &n : waypointsDB.getByMap(mapID)) {
+    //     std::cout << n;
+    // }
+
+    // ------------------------------------------------------------------------
+    // Polygons TEST
+    //
+    // MapPolygonsDB::MapPolygon poly;
+    // poly.map_id = mapID;
+    // poly.setType(MapPolygonsDB::PolygonAllowedTypes::BORDER);
+    // poly.identifier = "Map Border";
+    // poly.createPoint(0, 0);
+    // poly.createPoint(1, 1);
+    // poly.createPoint(2, 2);
+    // poly.createPoint(3, 3);
+    //
+    // // polygonsDB.remove(44, mapID);
+    // // return 0;
+    // if (polygonsDB.add(poly))
+    // {
+    //     poly.resetPoints();
+    //     poly.createPoint(5, 5);
+    //     poly.createPoint(1, 1);
+    //     poly.createPoint(2, 2);
+    //     poly.createPoint(3, 3);
+    //     poly.createPoint(25, 5*poly.getID());
+    //     polygonsDB.update(poly);
+    //
+    //     for (MapPolygonsDB::MapPolygon& n : polygonsDB.getByMap(mapID))
+    //     {
+    //         std::cout << n;
+    //         n.createPoint(10, 10);
+    //         std::cout << "Updated: " << n;
+    //         polygonsDB.update(n);
+    //     }
+    //
+    //     // polygonsDB.remove(poly.getID(), mapID);
+    // }
+    //
+    // std::cout << "\n--- Final ---\n";
+    // for (MapPolygonsDB::MapPolygon& n : polygonsDB.getByMap(mapID))
+    // {
     //     std::cout << n;
     // }
 
