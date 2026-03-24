@@ -1,8 +1,13 @@
+# Postgres SQL C++ Wrapper
+
+## References:
+- [CppDB](https://cppcms.com/sql/cppdb/index.html) 
+- [Postgres Backend](https://salsa.debian.org/debian/cppdb/-/blob/master/drivers/postgres_backend.cpp) 
+
+## Diagram:
+
 ```mermaid
 erDiagram
-	map_polygons ||--o{ map_polygon_points : "id -> polygon_id"
-	maps ||--o{ map_polygons : "id -> map_id"
-	maps ||--o{ map_waypoints : "id -> map_id"
 
 	wifi_profiles {
 		TEXT ssid
